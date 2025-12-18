@@ -20,6 +20,8 @@ model User {
   isVerified Boolean  @default(false)
   createdAt  DateTime @default(now())
 
+  tokens     UserToken[]
+
   applications JobApplication[]
 }
 
@@ -31,6 +33,18 @@ model Otp {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+model UserToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Jobs {
