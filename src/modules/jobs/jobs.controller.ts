@@ -4,7 +4,7 @@ import { fetchJobsFromApi } from "./services/fetchJobs.service";
 import { PrismaClient } from "@prisma/client";
 import { getJobsService } from "./services/getJobs.service";
 import { getJobByIdService } from "./services/getJobsById.service";
-import { HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
+import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
 
 const prisma = new PrismaClient();
 
@@ -24,15 +24,19 @@ export const fetchJobsController = async (req: Request, res: Response) => {
       Number(page) || 1
     );
 
-    res.json({
+    res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: `${count} jobs fetched and stored`,
+      code: SUCCESS_MESSAGES.JOBS_FETCHED.code,
+      message: SUCCESS_MESSAGES.JOBS_FETCHED.message,
+      Count: count
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({
+    res.status(HTTP_STATUS.FORBIDDEN).json({
       success: false,
-      message: "Failed to fetch jobs",
+      code: ERROR_MESSAGES.SOMETHING_WENT_WRONG.code,
+      message: ERROR_MESSAGES.SOMETHING_WENT_WRONG.message,
+      Error: error
     });
   }
 };

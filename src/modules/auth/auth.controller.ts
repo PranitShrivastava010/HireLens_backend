@@ -7,7 +7,7 @@ export const requestOtpController = async (req: Request, res: Response, next: Ne
   try {
     const { email } = req.body;
     const result = await sendOtp(email);
-    res.send(HTTP_STATUS.OK).json({
+    res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.OTP_SENT.code,
       message: SUCCESS_MESSAGES.OTP_SENT.message,

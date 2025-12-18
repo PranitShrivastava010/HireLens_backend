@@ -1,5 +1,9 @@
 import axios from "axios";
 import { prisma } from "../../../lib/prisma";
+import { extractExperience } from "../../../utils/extractExperience";
+import { extractSalaryFromDescription } from "../../../utils/extractSalary";
+import { extractQualifications } from "../../../utils/extractEducation";
+import { extractLocationFromDescription } from "../../../utils/extractLocation";
 
 const RAPID_API_URL = "https://jsearch.p.rapidapi.com/search";
 
@@ -25,6 +29,16 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
   const jobs = response.data?.data || [];
 
   for (const job of jobs) {
+
+    const description = job.job_description ?? "";
+
+    const experience = extractExperience(description);
+    const salary = extractSalaryFromDescription(description);
+    const extractedLocation =
+      job.job_city && job.job_state
+        ? {}
+        : extractLocationFromDescription(description);
+
     await prisma.jobs.upsert({
       where: {
         providerJobId: job.job_id,
@@ -44,23 +58,26 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
         companyWebsite: job.employer_website,
 
         location: job.job_location,
-        city: job.job_city,
-        state: job.job_state,
-        country: job.job_country,
+        city: job.job_city ?? extractedLocation.city ?? null,
+        state: job.job_state ?? extractedLocation.state ?? null,
+        country: job.job_country ?? extractedLocation.country ?? null,
 
         applyUrl: job.job_apply_link,
 
-        minSalary: job.job_min_salary,
-        maxSalary: job.job_max_salary,
-        salaryPeriod: job.job_salary_period,
+        minSalary: job.job_min_salary ?? salary.min ?? null,
+        maxSalary: job.job_max_salary ?? salary.max ?? null,
+        salaryPeriod: job.job_salary_period ?? salary.period ?? null,
 
         postedAt: job.job_posted_at,
         postedAtUtc: job.job_posted_at_datetime_utc
           ? new Date(job.job_posted_at_datetime_utc)
           : null,
 
-        qualifications:
-          job.job_highlights?.Qualifications ?? [],
+        experienceRaw: experience.experienceRaw ?? [],
+        minExperienceYears: experience.minExperienceYears ?? null,
+        maxExperienceYears: experience.maxExperienceYears ?? null,
+
+        qualifications: extractQualifications(description),
 
         responsibilities:
           job.job_highlights?.Responsibilities ?? [],

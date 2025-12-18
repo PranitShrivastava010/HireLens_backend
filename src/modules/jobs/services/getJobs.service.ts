@@ -55,6 +55,10 @@ export const getJobsService = async ({
         companyLogo: true,
         employmentType: true,
         postedAt: true,
+        minExperienceYears: true,
+        maxExperienceYears: true,
+        minSalary: true,
+        maxSalary: true
       },
     }),
     prisma.jobs.count({ where }),
