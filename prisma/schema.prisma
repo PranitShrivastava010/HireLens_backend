@@ -36,13 +36,13 @@ model Otp {
 }
 
 model UserToken {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id               String   @id @default(uuid())
+  userId           String
+  refreshToken     String   @unique
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -71,7 +71,7 @@ model Jobs {
   maxSalary        Int?
   salaryPeriod     String?
 
-  postedAt         String
+  postedAt         String?
   postedAtUtc      DateTime?
 
   qualifications   String[]

@@ -1,38 +1,57 @@
 import { prisma } from "../../../lib/prisma";
 import crypto from "crypto";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
+import { compareOtp } from "../../../utils/otp";
+import { ERROR_MESSAGES } from "../../../constants";
 
-export const verifyOtp = async (email: string, otp: string) => {
-  const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+export const verifyOtpService = async (
+  email: string,
+  otp: string,
+  name: string
+) => {
 
-  const otpRecord = await prisma.otp.findFirst({
-    where: { email, otp: hashedOtp },
+  if (!name || !name.trim()) {
+    throw new Error(ERROR_MESSAGES.NAME_REQUIRED.message);
+  }
+
+  const record = await prisma.otp.findFirst({
+    where: { email },
+    orderBy: { createdAt: "desc" },
   });
 
-  if (!otpRecord || otpRecord.expiresAt < new Date()) {
-    throw new Error("Invalid or expired OTP");
-  }
+  if (!record) throw new Error("OTP not found");
+  if (record.expiresAt < new Date()) throw new Error("OTP expired");
 
-  let user = await prisma.user.findUnique({ where: { email } });
+  const isValid = compareOtp(otp, record.otp);
+  if (!isValid) throw new Error("Invalid OTP");
 
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email, name: email.split("@")[0] },
-    });
-  }
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { isVerified: true },
+    create: {
+      email,
+      name,
+      isVerified: true,
+    },
+  });
 
   await prisma.otp.deleteMany({ where: { email } });
 
+  // 🔐 Generate tokens
   const accessToken = generateAccessToken(user.id);
-  const refreshToken = generateRefreshToken();
+  const refreshToken = generateRefreshToken(user.id);
 
   await prisma.userToken.create({
     data: {
       userId: user.id,
-      token: refreshToken,
+      refreshToken,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   });
 
-  return { accessToken, refreshToken, user };
+  return {
+    accessToken,
+    refreshToken,
+    user,
+  };
 };

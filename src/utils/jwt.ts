@@ -1,14 +1,18 @@
 import jwt from "jsonwebtoken";
-import * as crypto from "crypto";
+import { JWT_CONFIG } from "../config/jwtConfig";
 
 export const generateAccessToken = (userId: string) => {
   return jwt.sign(
     { userId },
-    process.env.JWT_SECRET!,
-    { expiresIn: "15m" }
+    JWT_CONFIG.ACCESS_SECRET,
+    { expiresIn: "1d" }
   );
 };
 
-export const generateRefreshToken = () => {
-  return crypto.randomBytes(40).toString("hex");
+export const generateRefreshToken = (userId: string) => {
+  return jwt.sign(
+    { userId },
+    JWT_CONFIG.REFRESH_SECRET,
+    { expiresIn: "7d" }
+  );
 };

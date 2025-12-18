@@ -3,7 +3,7 @@ import { generateOtp, hashOtp } from "../../../utils/otp";
 import { mailTransporter } from "../../../config/mail";
 
 
-export const sendOtp = async (email: string, name: string) => {
+export const sendOtp = async (email: string,) => {
   const otp = generateOtp();
   const hashedOtp = hashOtp(otp);
 

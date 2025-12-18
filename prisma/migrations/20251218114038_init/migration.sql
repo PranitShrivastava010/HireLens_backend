@@ -21,6 +21,17 @@ CREATE TABLE "Otp" (
 );
 
 -- CreateTable
+CREATE TABLE "UserToken" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "refreshToken" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserToken_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Jobs" (
     "id" TEXT NOT NULL,
     "providerJobId" TEXT NOT NULL,
@@ -40,7 +51,7 @@ CREATE TABLE "Jobs" (
     "minSalary" INTEGER,
     "maxSalary" INTEGER,
     "salaryPeriod" TEXT,
-    "postedAt" TEXT NOT NULL,
+    "postedAt" TEXT,
     "postedAtUtc" TIMESTAMP(3),
     "qualifications" TEXT[],
     "responsibilities" TEXT[],
@@ -77,6 +88,12 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE INDEX "Otp_email_idx" ON "Otp"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "UserToken_refreshToken_key" ON "UserToken"("refreshToken");
+
+-- CreateIndex
+CREATE INDEX "UserToken_userId_idx" ON "UserToken"("userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Jobs_providerJobId_key" ON "Jobs"("providerJobId");
 
 -- CreateIndex
@@ -93,6 +110,9 @@ CREATE UNIQUE INDEX "ApplicationStatus_key_key" ON "ApplicationStatus"("key");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "JobApplication_userId_jobId_key" ON "JobApplication"("userId", "jobId");
+
+-- AddForeignKey
+ALTER TABLE "UserToken" ADD CONSTRAINT "UserToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "JobApplication" ADD CONSTRAINT "JobApplication_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
