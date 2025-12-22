@@ -1,12 +1,16 @@
 import { Router } from "express";
 import {
-  requestOtpController,
+  loginController,
+  refreshTokenController,
+  registerController,
   verifyOtpController,
 } from "./auth.controller";
 
 const router = Router();
 
-router.post("/send-otp", requestOtpController);
+router.post("/register", registerController);
 router.post("/verify-otp", verifyOtpController);
+router.post("/login", loginController)
+router.post("/refresh", refreshTokenController)
 
 export default router;
