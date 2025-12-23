@@ -9,6 +9,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.json({ status: "HireLens backend running" });
+});
+
 app.use("/api", routes);
 
 app.use(errorHandler);
