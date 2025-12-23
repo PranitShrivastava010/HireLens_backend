@@ -41,6 +41,8 @@ export const fetchJobKeywordsService = async (jobId: string) => {
       jobId,
       keyword: k.keyword,
       score: k.score,
+      type: k.type,
+      aliases: k.aliases ?? [],
     })),
   });
 };

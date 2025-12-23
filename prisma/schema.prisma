@@ -23,6 +23,7 @@ model User {
 
   tokens     UserToken[]
   resume     Resume[]
+  atsAnalysis AtsAnalysis[]
 
   applications JobApplication[]
 }
@@ -88,6 +89,7 @@ model Jobs {
 
   applications           JobApplication[]
   keyword                JobKeyword[]
+  atsAnalysis            AtsAnalysis[]
 
   @@index([title])
   @@index([companyName])
@@ -145,6 +147,9 @@ model JobKeyword {
   keyword          String
   score           Float
 
+  type            KeywordType @default(ATOMIC)
+  aliases         String[]    @default([])
+
   createdAt       DateTime @default(now())
 
   job             Jobs @relation(fields: [jobId], references: [id])
@@ -153,14 +158,46 @@ model JobKeyword {
   @@index([keyword])
 }
 
+enum KeywordType {
+  ATOMIC
+  CATEGORY
+  CONCEPT
+}
+
 model Resume {
   id              String @id @default(uuid())
   userId          String
   filePath        String
+  extractedText   String
 
   createdAt       DateTime @default(now())
 
   user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  atsAnalysis     AtsAnalysis[]
 
   @@index([userId])
 }
+
+model AtsAnalysis {
+  id            String   @id @default(uuid())
+  userId        String
+  jobId         String?      // nullable for future role-based ATS
+  resumeId      String
+
+  score         Float
+  matchedCount  Int
+  missingCount  Int
+
+  matchedKeywords String[]
+  missingKeywords String[]
+
+  createdAt     DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  job    Jobs?  @relation(fields: [jobId], references: [id])
+  resume Resume @relation(fields: [resumeId], references: [id])
+
+  @@index([userId])
+  @@index([jobId])
+}
+
