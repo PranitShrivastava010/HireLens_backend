@@ -4,16 +4,7 @@ import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
 import { compareOtp } from "../../../utils/otp";
 import { ERROR_MESSAGES } from "../../../constants";
 
-export const verifyOtpService = async (
-  email: string,
-  otp: string,
-  name: string
-) => {
-
-  if (!name || !name.trim()) {
-    throw new Error(ERROR_MESSAGES.NAME_REQUIRED.message);
-  }
-
+export const verifyOtpService = async (email: string, otp: string) => {
   const record = await prisma.otp.findFirst({
     where: { email },
     orderBy: { createdAt: "desc" },
@@ -25,19 +16,13 @@ export const verifyOtpService = async (
   const isValid = compareOtp(otp, record.otp);
   if (!isValid) throw new Error("Invalid OTP");
 
-  const user = await prisma.user.upsert({
+  const user = await prisma.user.update({
     where: { email },
-    update: { isVerified: true },
-    create: {
-      email,
-      name,
-      isVerified: true,
-    },
+    data: { isVerified: true },
   });
 
   await prisma.otp.deleteMany({ where: { email } });
 
-  // 🔐 Generate tokens
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
 
@@ -49,9 +34,5 @@ export const verifyOtpService = async (
     },
   });
 
-  return {
-    accessToken,
-    refreshToken,
-    user,
-  };
+  return { accessToken, refreshToken, user };
 };

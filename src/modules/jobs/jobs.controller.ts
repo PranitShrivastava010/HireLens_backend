@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import { getJobsService } from "./services/getJobs.service";
 import { getJobByIdService } from "./services/getJobsById.service";
 import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
+import { fetchJobKeywordsService } from "./services/fetchJobsKeywords.service";
 
 const prisma = new PrismaClient();
 
@@ -82,6 +83,34 @@ export const getJobByIdController = async (req: Request, res: Response) => {
     res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+export const fetchJobsKeywordController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { jobId } = req.params;
+
+    // 1. Generate keywords (cached)
+    await fetchJobKeywordsService(jobId);
+
+    // 2. Fetch keywords
+    const keywords = await prisma.jobKeyword.findMany({
+      where: { jobId },
+      orderBy: { score: "desc" },
+    });
+
+    return res.status(200).json({
+      success: true,
+      keywords,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to prepare apply",
     });
   }
 };
