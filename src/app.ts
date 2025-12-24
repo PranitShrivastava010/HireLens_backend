@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import routes from "./routes";
-// import { errorHandler } from "../src/middlewares/error.middleware";
+import { errorHandler } from "../src/middlewares/error.middleware";
 
 const app = express();
 
@@ -13,8 +13,8 @@ app.get("/", (req, res) => {
   res.json({ status: "HireLens backend running" });
 });
 
-app.use(routes);
+app.use("/api", routes);
 
-// app.use(errorHandler);
+app.use(errorHandler);
 
 export default app;
