@@ -8,5 +8,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src", "prisma/seed.ts", "api"]
+  "include": ["src/**/*", "prisma/**/*", "index.ts",]
 }
