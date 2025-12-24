@@ -13,9 +13,7 @@ app.get("/", (req, res) => {
   res.json({ status: "HireLens backend running" });
 });
 
-app.get("/api/job", (req, res) => {
-  return res.json({ status: "ok job" });
-});
+app.use("/api", routes);
 
 // app.use(errorHandler);
 
