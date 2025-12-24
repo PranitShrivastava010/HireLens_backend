@@ -17,6 +17,7 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.89.0",
     "@types/nodemailer": "^7.0.4",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",

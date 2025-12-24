@@ -3,12 +3,12 @@ import { extractPdfText } from "../../../utils/extractPdfText";
 
 export const uploadResumeService = async (
   userId: string,
-  filePath: string
+  filePath: string,
+  fileBuffer: Buffer
 ) => {
-  // 1️⃣ Extract text
-  const extractedText = await extractPdfText(filePath);
+  const extractedText = await extractPdfText(fileBuffer);
 
-  // 2️⃣ Save resume + text
+  // Prisma writes directly to Neon DB
   const resume = await prisma.resume.create({
     data: {
       userId,

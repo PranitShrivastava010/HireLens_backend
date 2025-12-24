@@ -175,6 +175,7 @@ model Resume {
   user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
   atsAnalysis     AtsAnalysis[]
 
+  @@map("Resume")
   @@index([userId])
 }
 

@@ -1,11 +1,9 @@
 import { Request, Response } from "express";
 import { uploadResumeService } from "./service/resumeUpload.service";
 import { atsScoreCalculateService } from "./service/atsScoreCalculate.service";
+import { uploadToSupabase } from "../../config/multer";
 
-export const uploadResumeController = async (
-  req: Request,
-  res: Response
-) => {
+export const uploadResumeController = async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -14,12 +12,15 @@ export const uploadResumeController = async (
       });
     }
 
-    const userId = req.user!.userId;
+    const userId = req.user!.userId; // make sure authMiddleware sets this
 
-    const resume = await uploadResumeService(
-      userId,
-      req.file.path
-    );
+    console.log("STEP 1: before Supabase upload");
+    const filePath = await uploadToSupabase(req.file);
+    console.log("STEP 1: after Supabase upload", filePath);
+
+    console.log("STEP 2: before Prisma insert");
+    const resume = await uploadResumeService(userId, filePath, req.file.buffer);
+    console.log("STEP 2: after Prisma insert", resume.id);
 
     return res.status(201).json({
       success: true,
@@ -27,12 +28,15 @@ export const uploadResumeController = async (
       resumeId: resume.id,
     });
   } catch (error: any) {
+    console.error("Upload Resume Error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
+      meta: error.meta
     });
   }
 };
+
 
 export const atsScoreCalculateController = async (
   req: Request,
