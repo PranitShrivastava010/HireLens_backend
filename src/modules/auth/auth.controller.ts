@@ -72,7 +72,9 @@ export const loginController = async (
   try {
     const { email, password } = req.body;
 
-    const { accessToken, refreshToken, user } = await loginService(email, password);
+    const { accessToken, refreshToken, sendUser } = await loginService(email, password);
+
+    console.log("senduser", sendUser)
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -85,7 +87,7 @@ export const loginController = async (
       success: true,
       code: SUCCESS_MESSAGES.LOGIN_SUCCESSFUL.code,
       message: SUCCESS_MESSAGES.LOGIN_SUCCESSFUL.message,
-      Result: { accessToken, user }
+      Result: { accessToken, sendUser }
     });
   } catch (err) {
     res.status(HTTP_STATUS.FORBIDDEN).json({
@@ -109,7 +111,7 @@ export const refreshTokenController = async (
       return res.status(401).json({ message: "No refresh token" });
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = await refreshTokenService(refreshToken);
+    const { accessToken, refreshToken: newRefreshToken, user } = await refreshTokenService(refreshToken);
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
@@ -122,7 +124,8 @@ export const refreshTokenController = async (
       success: true,
       code: SUCCESS_MESSAGES.TOKEN_REFRESH.code,
       message: SUCCESS_MESSAGES.TOKEN_REFRESH.message,
-      accessToken: accessToken
+      accessToken: accessToken,
+      user: user
     });
   } catch (err) {
     next(err);

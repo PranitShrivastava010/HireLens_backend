@@ -26,5 +26,11 @@ export const loginService = async (email: string, password: string) => {
     },
   });
 
-  return { accessToken, refreshToken, user };
+  const sendUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name
+  }
+
+  return { accessToken, refreshToken, sendUser };
 };

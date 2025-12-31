@@ -49,8 +49,15 @@ export const refreshTokenService = async (refreshToken: string) => {
     },
   });
 
+  const user = {
+    id: storedToken.user.id,
+    email: storedToken.user.email,
+    name: storedToken.user.name
+  }
+
   return {
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
+    user: user
   };
 };
