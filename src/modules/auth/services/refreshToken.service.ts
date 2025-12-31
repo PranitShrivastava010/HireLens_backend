@@ -8,13 +8,6 @@ export const refreshTokenService = async (refreshToken: string) => {
     throw new Error("Refresh token required");
   }
 
-  let payload: any;
-  try {
-    payload = jwt.verify(refreshToken, JWT_CONFIG.REFRESH_SECRET);
-  } catch {
-    throw new Error("Invalid or expired refresh token");
-  }
-
   const storedToken = await prisma.userToken.findUnique({
     where: { refreshToken },
     include: { user: true },
@@ -23,6 +16,19 @@ export const refreshTokenService = async (refreshToken: string) => {
   if (!storedToken) {
     throw new Error("Refresh token revoked");
   }
+
+  if (storedToken.expiresAt < new Date()) {
+    await prisma.userToken.delete({ where: { refreshToken } });
+    throw new Error("Refresh token expired");
+  }
+
+  let payload: any;
+  try {
+    payload = jwt.verify(refreshToken, JWT_CONFIG.REFRESH_SECRET);
+  } catch {
+    throw new Error("Invalid or expired refresh token");
+  }
+
 
   if (!storedToken.user.isVerified) {
     throw new Error("User not verified");

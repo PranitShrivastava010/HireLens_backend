@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import routes from "./routes";
 // import { errorHandler } from "../src/middlewares/error.middleware";
+import cookieParser from "cookie-parser"
 
 const app = express();
 
@@ -16,6 +17,8 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+
+app.use(cookieParser())
 
 app.get("/", (req, res) => {
   res.json({ status: "HireLens backend running" });

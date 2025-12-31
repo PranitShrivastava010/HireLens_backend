@@ -39,13 +39,20 @@ export const verifyOtpController = async (
   try {
     const { email, otp } = req.body;
 
-    const result = await verifyOtpService(email, otp);
+    const { accessToken, refreshToken, user } = await verifyOtpService(email, otp);
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.OTP_VERIFIED.code,
       message: SUCCESS_MESSAGES.OTP_VERIFIED.message,
-      Result: result
+      Result: { accessToken, user }
     });
   } catch (err) {
     res.status(HTTP_STATUS.FORBIDDEN).json({
@@ -65,13 +72,20 @@ export const loginController = async (
   try {
     const { email, password } = req.body;
 
-    const result = await loginService(email, password);
+    const { accessToken, refreshToken, user } = await loginService(email, password);
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.LOGIN_SUCCESSFUL.code,
       message: SUCCESS_MESSAGES.LOGIN_SUCCESSFUL.message,
-      Result: result
+      Result: { accessToken, user }
     });
   } catch (err) {
     res.status(HTTP_STATUS.FORBIDDEN).json({
@@ -89,16 +103,26 @@ export const refreshTokenController = async (
   next: NextFunction
 ) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
 
-    const result = await refreshTokenService(refreshToken);
+    if (!refreshToken) {
+      return res.status(401).json({ message: "No refresh token" });
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } = await refreshTokenService(refreshToken);
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.TOKEN_REFRESH.code,
       message: SUCCESS_MESSAGES.TOKEN_REFRESH.message,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
+      accessToken: accessToken
     });
   } catch (err) {
     next(err);

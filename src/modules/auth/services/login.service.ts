@@ -11,6 +11,10 @@ export const loginService = async (email: string, password: string) => {
   const isMatch = await comparePassword(password, user.password);
   if (!isMatch) throw new Error("Invalid credentials");
 
+  await prisma.userToken.deleteMany({
+    where: { userId: user.id },
+  });
+
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
 
