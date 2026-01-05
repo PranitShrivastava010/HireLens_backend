@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { JWT_CONFIG } from "../config/jwtConfig";
+import { randomUUID } from "crypto";
 
 export const generateAccessToken = (userId: string) => {
   return jwt.sign(
@@ -11,7 +12,10 @@ export const generateAccessToken = (userId: string) => {
 
 export const generateRefreshToken = (userId: string) => {
   return jwt.sign(
-    { userId },
+    {
+      userId,
+      jti: randomUUID(), // 🔥 guarantees uniqueness
+    },
     JWT_CONFIG.REFRESH_SECRET,
     { expiresIn: "7d" }
   );

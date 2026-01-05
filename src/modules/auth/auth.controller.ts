@@ -39,12 +39,12 @@ export const verifyOtpController = async (
   try {
     const { email, otp } = req.body;
 
-    const { accessToken, refreshToken, user } = await verifyOtpService(email, otp);
+    const { accessToken, refreshToken, sendUser } = await verifyOtpService(email, otp);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true, // REQUIRED for SameSite=None
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -52,7 +52,7 @@ export const verifyOtpController = async (
       success: true,
       code: SUCCESS_MESSAGES.OTP_VERIFIED.code,
       message: SUCCESS_MESSAGES.OTP_VERIFIED.message,
-      Result: { accessToken, user }
+      Result: { accessToken, sendUser }
     });
   } catch (err) {
     res.status(HTTP_STATUS.FORBIDDEN).json({
@@ -74,12 +74,12 @@ export const loginController = async (
 
     const { accessToken, refreshToken, sendUser } = await loginService(email, password);
 
-    console.log("senduser", sendUser)
+    const isProduction = process.env.NODE_ENV === "production";
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true, // REQUIRED for SameSite=None
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -111,12 +111,22 @@ export const refreshTokenController = async (
       return res.status(401).json({ message: "No refresh token" });
     }
 
-    const { accessToken, refreshToken: newRefreshToken, user } = await refreshTokenService(refreshToken);
+    const result = await refreshTokenService(refreshToken);
+
+    if (!result) {
+      // Token was already used, expired, or invalid
+      return res.status(401).json({
+        success: false,
+        message: "Refresh token invalid or already used",
+      });
+    }
+
+    const { accessToken, refreshToken: newRefreshToken, user } = result;
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true, // REQUIRED for SameSite=None
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

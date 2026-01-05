@@ -19,6 +19,11 @@ export const verifyOtpService = async (email: string, otp: string) => {
   const user = await prisma.user.update({
     where: { email },
     data: { isVerified: true },
+    select: {
+      id: true,
+      email: true,
+      name: true
+    }
   });
 
   await prisma.otp.deleteMany({ where: { email } });
@@ -34,5 +39,11 @@ export const verifyOtpService = async (email: string, otp: string) => {
     },
   });
 
-  return { accessToken, refreshToken, user };
+  const sendUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name
+  };
+
+  return { accessToken, refreshToken, sendUser };
 };
