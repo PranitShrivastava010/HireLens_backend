@@ -15,7 +15,7 @@ export const refreshTokenService = async (refreshToken: string) => {
 
   if (!storedToken) {
     // Token already rotated or revoked
-    console.warn("Refresh token already used or revoked");
+    console.warn(`[RefreshTokenService] Token not found or already used: ${refreshToken.substring(0, 10)}...`);
     return null;
   }
 
@@ -60,6 +60,7 @@ export const refreshTokenService = async (refreshToken: string) => {
       id: storedToken.user.id,
       email: storedToken.user.email,
       name: storedToken.user.name,
+      hasCompletedPref: storedToken.user.hasCompletedPref
     },
   };
 };

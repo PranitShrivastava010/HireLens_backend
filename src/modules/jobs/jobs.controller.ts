@@ -6,6 +6,9 @@ import { getJobsService } from "./services/getJobs.service";
 import { getJobByIdService } from "./services/getJobsById.service";
 import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
 import { fetchJobKeywordsService } from "./services/fetchJobsKeywords.service";
+import { getRoleSkillService } from "./services/getRoleSkill.service";
+import { saveUserPreferencesService } from "./services/userPreference.service";
+import { getUserPreferencesService } from "./services/getPreference.service";
 
 const prisma = new PrismaClient();
 
@@ -44,9 +47,17 @@ export const fetchJobsController = async (req: Request, res: Response) => {
 
 export const getJobsController = async (req: Request, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const { search, location, isRemote, page, limit } = req.query;
 
     const result = await getJobsService({
+      userId: req.user.userId,
       search: search as string,
       location: location as string,
       isRemote:
@@ -59,10 +70,12 @@ export const getJobsController = async (req: Request, res: Response) => {
       success: true,
       ...result,
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Error in getJobsController:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch jobs",
+      Error: error.message || error,
     });
   }
 };
@@ -70,8 +83,16 @@ export const getJobsController = async (req: Request, res: Response) => {
 export const getJobByIdController = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.userId;
 
-    const job = await getJobByIdService(id);
+    if (!userId) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: "User not authenticated",
+      });
+    }
+
+    const job = await getJobByIdService(id, userId);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -111,6 +132,92 @@ export const fetchJobsKeywordController = async (
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to prepare apply",
+    });
+  }
+};
+
+export const getRoleSkillController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const q = String(req.query.q || "");
+    const limit = Number(req.query.limit || 10);
+
+    if (q.length < 2) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const data = await getRoleSkillService({ query: q, limit });
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Autocomplete failed",
+    });
+  }
+};
+
+export const saveUserPreferencesController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = req.user!.userId;
+    const { roleSlugs = [], skillSlugs = [] } = req.body;
+
+    console.log("Raw body", req.body)
+    console.log("roleSlugs:", req.body?.roleSlugs);
+    console.log("skillSlugs:", req.body?.skillSlugs);
+
+    await saveUserPreferencesService({
+      userId,
+      roleSlugs,
+      skillSlugs,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Preferences saved",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getUserPreferencesController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // auth middleware guarantee
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const data = await getUserPreferencesService(req.user!.userId);
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch preferences",
     });
   }
 };

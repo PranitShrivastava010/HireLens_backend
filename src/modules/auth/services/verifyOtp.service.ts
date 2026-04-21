@@ -42,7 +42,8 @@ export const verifyOtpService = async (email: string, otp: string) => {
   const sendUser = {
     id: user.id,
     email: user.email,
-    name: user.name
+    name: user.name,
+    hasCompletedPref: user.hasCompletedPref
   };
 
   return { accessToken, refreshToken, sendUser };

@@ -4,10 +4,11 @@ import { extractExperience } from "../../../utils/extractExperience";
 import { extractSalaryFromDescription } from "../../../utils/extractSalary";
 import { extractQualifications } from "../../../utils/extractEducation";
 import { extractLocationFromDescription } from "../../../utils/extractLocation";
+import { extractRolesAndSkillsForJob } from "./roleSkill.service";
 
 const RAPID_API_URL = "https://jsearch.p.rapidapi.com/search";
 
-export const fetchJobsFromApi = async (query: string, page = 1) => {
+export const fetchJobsFromApi = async (query: string, page = 2) => {
   const options = {
     method: "GET",
     url: RAPID_API_URL,
@@ -16,7 +17,7 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
       page,
       num_pages: "1",
       country: "in",
-      date_posted: "all",
+      date_posted: "month",
     },
     headers: {
       "x-rapidapi-key": process.env.RAPIDAPI_KEY!,
@@ -39,11 +40,20 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
         ? {}
         : extractLocationFromDescription(description);
 
-    await prisma.jobs.upsert({
+    const dbJob = await prisma.jobs.upsert({
       where: {
         providerJobId: job.job_id,
       },
-      update: {},
+      update: {
+        lastFetchedAt: new Date(),
+
+        companyLogo: job.employer_logo,
+        applyUrl: job.job_apply_link,
+
+        minSalary: job.job_min_salary ?? salary.min ?? null,
+        maxSalary: job.job_max_salary ?? salary.max ?? null,
+        salaryPeriod: job.job_salary_period ?? salary.period ?? null,
+      },
       create: {
         providerJobId: job.job_id,
         providerName: job.job_publisher,
@@ -73,6 +83,8 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
           ? new Date(job.job_posted_at_datetime_utc)
           : null,
 
+        lastFetchedAt: new Date(),
+
         experienceRaw: experience.experienceRaw ?? [],
         minExperienceYears: experience.minExperienceYears ?? null,
         maxExperienceYears: experience.maxExperienceYears ?? null,
@@ -83,6 +95,12 @@ export const fetchJobsFromApi = async (query: string, page = 1) => {
           job.job_highlights?.Responsibilities ?? [],
       },
     });
+
+    try {
+      await extractRolesAndSkillsForJob(dbJob.id)
+    } catch (error) {
+      console.log("Failed to extract roles/skills for job", dbJob.id, error)
+    }
   }
 
   return {

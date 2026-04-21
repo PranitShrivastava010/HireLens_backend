@@ -3,7 +3,7 @@ import { comparePassword } from "../../../utils/hashPassword";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
 
 export const loginService = async (email: string, password: string) => {
-  const user = await prisma.user.findUnique({ where: { email }, select: {id: true, email: true, name: true, password: true, isVerified: true} });
+  const user = await prisma.user.findUnique({ where: { email }, select: {id: true, email: true, name: true, password: true, isVerified: true, hasCompletedPref: true} });
 
   if (!user) throw new Error("User not found");
   if (!user.isVerified) throw new Error("User not verified");
@@ -29,7 +29,8 @@ export const loginService = async (email: string, password: string) => {
   const sendUser = {
     id: user.id,
     email: user.email,
-    name: user.name
+    name: user.name,
+    hasCompletedPref: user.hasCompletedPref
   };
 
   return { accessToken, refreshToken, sendUser };

@@ -14,12 +14,16 @@ datasource db {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  name       String
-  password   String
-  isVerified Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  name                String
+  password            String
+  isVerified          Boolean  @default(false)
+  hasCompletedPref    Boolean @default(false)
+  createdAt           DateTime @default(now())
+
+  rolePreferences     UserRolePreference[]
+  skillPreferences    UserSkillPreference[]
 
   tokens     UserToken[]
   resume     Resume[]
@@ -85,11 +89,18 @@ model Jobs {
 
   postedAt               String?
   postedAtUtc            DateTime?
+
+  applyStatus            Boolean  @default(false)
+
+  lastFetchedAt          DateTime @default(now())
+
   createdAt              DateTime @default(now())
 
   applications           JobApplication[]
   keyword                JobKeyword[]
   atsAnalysis            AtsAnalysis[]
+  jobRoles               JobRole[]
+  jobSkills              JobSkill[]
 
   @@index([title])
   @@index([companyName])
@@ -108,6 +119,87 @@ enum SalaryPeriod {
   YEAR
 }
 
+model Role {
+  id             String @id @default(uuid())
+  name           String @unique
+  slug           String @unique
+  createdAt      DateTime @default(now())
+
+  aliases        RoleAlias[]
+  jobs           JobRole[]
+  rolePreferences UserRolePreference[]
+}
+
+model RoleAlias {
+  id             String @id @default(uuid())
+  roleId         String
+  alias          String @unique
+
+  role          Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@index([alias])
+}
+
+model Skill {
+  id             String @id @default(uuid())
+  name           String @unique
+  slug           String @unique
+  createdAt      DateTime @default(now())
+
+  aliases        SkillAlias[]
+  jobs           JobSkill[]
+  skillPreferences UserSkillPreference[]
+}
+
+model SkillAlias {
+  id             String @id @default(uuid())
+  skillId        String
+  alias          String @unique
+
+  skill          Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([alias])
+}
+
+model JobRole {
+  jobId          String
+  roleId         String
+
+  job            Jobs @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  role           Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, roleId])
+}
+
+model JobSkill {
+  jobId         String
+  skillId       String
+
+  job           Jobs @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill         Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, skillId])
+}
+
+model UserRolePreference {
+  userId        String
+  roleId        String
+
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model UserSkillPreference {
+  userId        String
+  skillId       String
+
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill         Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+}
 
 model ApplicationStatus {
   id    String @id @default(uuid())
@@ -200,5 +292,102 @@ model AtsAnalysis {
 
   @@index([userId])
   @@index([jobId])
+}
+
+model BuildResume {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  basics        ResumeBasics?
+  experiences   ResumeExperience[]
+  educations    ResumeEducation[]
+  projects      ResumeProject[]
+  skills        ResumeSkill[]
+  certifications ResumeCertification[]
+}
+
+model ResumeBasics {
+  id        String  @id @default(uuid())
+  resumeId String  @unique
+
+  fullName String
+  headline String?
+  summary  String?
+
+  email    String?
+  phone    String?
+  location String?
+  linkedin String?
+  github   String?
+
+  resume   BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeExperience {
+  id          String   @id @default(uuid())
+  resumeId   String
+
+  company     String
+  role        String
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  isCurrent   Boolean @default(false)
+
+  bullets     String[] // achievements
+
+  orderIndex  Int
+  resume      BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeEducation {
+  id        String @id @default(uuid())
+  resumeId String
+
+  institute String
+  degree    String
+  field     String?
+  startYear Int
+  endYear   Int?
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeSkill {
+  id        String @id @default(uuid())
+  resumeId String
+
+  name      String
+  level     String? // Beginner / Intermediate / Expert
+  category  String? // Backend, Frontend, DevOps
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeProject {
+  id        String @id @default(uuid())
+  resumeId String
+
+  name        String
+  description String
+  techStack   String[]
+  link        String?
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeCertification {
+  id        String @id @default(uuid())
+  resumeId String
+
+  name       String
+  issuer    String
+  year      Int?
+  link      String?
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
 }
 

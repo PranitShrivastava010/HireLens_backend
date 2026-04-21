@@ -44,7 +44,7 @@ export const verifyOtpController = async (
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: true, // REQUIRED for SameSite=None
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -79,7 +79,7 @@ export const loginController = async (
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: true, // REQUIRED for SameSite=None
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -126,7 +126,7 @@ export const refreshTokenController = async (
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: true, // REQUIRED for SameSite=None
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
