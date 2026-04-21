@@ -7,7 +7,7 @@
 
 ## Phase 1 — Stability & Correctness
 
-### TASK-B-01 — Fix Refresh Token Error Handling 🔲
+### TASK-B-01 — Fix Refresh Token Error Handling ✅
 **Problem:** If refresh token is expired or already rotated, the endpoint crashes instead of returning a clean 401.  
 **Goal:** Ensure all error cases in `refreshTokenService` return proper structured responses instead of throwing unhandled errors.  
 **Files:** `src/modules/auth/services/refreshToken.service.ts`, `auth.controller.ts`  
@@ -17,52 +17,66 @@
 
 ---
 
-### TASK-B-02 — Add Input Validation with Zod 🔲
+### TASK-B-02 — Add Input Validation with Zod ✅
 **Problem:** No request body validation on any endpoint. Any malformed input hits the service layer.  
 **Goal:** Add Zod schemas for all auth and job routes. Validate in controller before calling service.  
 **Files:** All controllers  
-**Schemas to add:**
-- `register` → email, name (min 2), password (min 8)
-- `verify-otp` → email, otp (6 digits)
-- `login` → email, password
-- `job/fetch` → query (string), page (number, optional)
-- `job/preference` → roleSlugs (array), skillSlugs (array)
-- `application/apply` → jobId (uuid), statusKey (string), interviewDate (optional date)
-**Acceptance:** Invalid body → `400 { success: false, errors: [...] }`
+**Schemas added:**
+- `register`, `verify-otp`, `login`
+- `job/fetch`, `job/preference`
+- `application/apply`, `application/status`
+**Acceptance:** Invalid body → `400 { success: false, code: "VALIDATION_ERROR", errors: [...] }`
 
 ---
 
-### TASK-B-03 — Seed Roles & Skills Master Data 🔲
-**Problem:** `Role` and `Skill` tables are empty unless AI has extracted them from fetched jobs. Users can't set preferences without pre-seeded data.  
-**Goal:** Create a seed file with ~20 common roles and ~40 common skills with proper slugs and aliases.  
-**File:** `prisma/seedRolesSkills.ts` (new)  
-**Roles to seed:** Backend Developer, Frontend Developer, Full Stack Developer, Node.js Developer, React Developer, DevOps Engineer, Data Engineer, ML Engineer, Mobile Developer, QA Engineer  
-**Skills to seed:** Node.js, Express, React, TypeScript, PostgreSQL, MongoDB, Redis, Docker, Kubernetes, AWS, GCP, Python, Django, FastAPI, Next.js, GraphQL, REST API, Git, CI/CD, Linux, Java, Spring Boot, MySQL, Flutter, React Native  
-**Acceptance:** Running seed creates all records; re-running is idempotent (upsert, no duplicates)
+### TASK-B-03 — AI-Driven Roles & Skills Extraction 🔲
+**Problem:** `Role` and `Skill` tables are empty. We want existing jobs in the database to be the source of truth for these master tables.  
+**Goal:** Create a one-time migration service/script that iterates through all jobs in the DB and uses Groq AI to extract and populate the `Role` and `Skill` tables.  
+**Logic:**
+1. Fetch all `Jobs` that haven't been linked to a `JobRole` or `JobSkill` yet.
+2. For each job, call `extractRolesAndSkillsForJob(job.id)`. (Service already exists in `roleSkill.service.ts`).
+3. This will automatically populate `Role`, `Skill`, and the mapping tables via `resolveRole`/`resolveSkill`.
+**Acceptance:** Running the script populates the Roles and Skills tables with real data from the DB jobs; results are visible in the frontend preferences chip selector.  
 
 ---
 
-### TASK-B-04 — Add Dashboard Stats API 🔲
-**Problem:** `dashboard` module is an empty folder. Frontend dashboard has no real data.  
-**Goal:** Create a `GET /api/dashboard/stats` endpoint returning aggregated user stats.  
-**Module:** `src/modules/dashboard/` (create from scratch)  
-**Response shape:**
+### TASK-B-04 — Add Dashboard Stats API & Goal Tracking 🔲
+**Problem:** Dashboard is empty. We need structured data for three specific charts: Weekly Progress (Progress against goal), Application Summary (Donut), and Weekly Activity (Bar).  
+**Goal:** Implement `GET /api/dashboard/stats` and `PATCH /api/dashboard/goal`.  
+**New Schema Field:** Add `weeklyGoal` (Int, default: 10) to `User` model.  
+**API Response Shape (`GET /api/dashboard/stats`):**
 ```json
 {
-  "totalApplications": 12,
-  "byStatus": [
-    { "key": "APPLIED", "label": "Applied", "count": 5 },
-    { "key": "INTERVIEW", "label": "Interview", "count": 3 }
+  "weeklyProgress": {
+    "appliedThisWeek": 4,
+    "weeklyGoal": 10,
+    "percentage": 40
+  },
+  "statusSummary": [
+    { "key": "APPLIED", "label": "Applied", "count": 12 },
+    { "key": "INTERVIEW", "label": "Interview", "count": 3 },
+    { "key": "OFFER", "label": "Offer", "count": 1 }
   ],
-  "upcomingInterviews": [
-    { "jobTitle": "...", "companyName": "...", "interviewDate": "..." }
-  ],
-  "recentApplications": [
-    { "jobTitle": "...", "companyName": "...", "status": "...", "appliedAt": "..." }
-  ]
+  "weeklyActivity": {
+    "monday": 2,
+    "tuesday": 0,
+    "wednesday": 1,
+    "thursday": 1,
+    "friday": 0,
+    "saturday": 0,
+    "sunday": 0
+  },
+  "upcomingInterviews": [...],
+  "recentApplications": [...]
 }
 ```
-**Acceptance:** Authenticated user gets correct aggregated data
+**Endpoints:**
+1. `GET /api/dashboard/stats`: Returns the aggregated data above.
+2. `PATCH /api/dashboard/goal`: Updates `User.weeklyGoal` via request body `{ goal: number }`.
+**Acceptance:** 
+- Frontend receives correct counts for the current week (filtering by `appliedAt`).
+- Percentage correctly calculated.
+- Daily counts correctly mapped to the current Monday-Sunday range.
 
 ---
 

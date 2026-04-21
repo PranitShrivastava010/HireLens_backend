@@ -108,34 +108,38 @@ export const refreshTokenController = async (
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-      return res.status(401).json({ message: "No refresh token" });
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        code: ERROR_MESSAGES.UNAUTHORIZED.code,
+        message: "Refresh token missing",
+      });
     }
 
     const result = await refreshTokenService(refreshToken);
 
-    if (!result) {
-      // Token was already used, expired, or invalid
-      return res.status(401).json({
+    if (!result.success) {
+      return res.status(result.statusCode || HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: "Refresh token invalid or already used",
+        code: ERROR_MESSAGES.INVALID_TOKEN.code,
+        message: result.message,
       });
     }
 
-    const { accessToken, refreshToken: newRefreshToken, user } = result;
+    const { accessToken, refreshToken: newRefreshToken, user } = result.data;
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
-      secure: true, // REQUIRED for SameSite=None
+      secure: true,
       sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(HTTP_STATUS.OK).json({
+    return res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.TOKEN_REFRESH.code,
       message: SUCCESS_MESSAGES.TOKEN_REFRESH.message,
-      accessToken: accessToken,
-      user: user
+      accessToken,
+      user,
     });
   } catch (err) {
     next(err);

@@ -3,9 +3,29 @@ import { prisma } from "../../../lib/prisma";
 import { JWT_CONFIG } from "../../../config/jwtConfig";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
 
-export const refreshTokenService = async (refreshToken: string) => {
+export type RefreshTokenResponse = 
+  | { 
+      success: true; 
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        user: {
+          id: string;
+          email: string;
+          name: string;
+          hasCompletedPref: boolean;
+        };
+      };
+    }
+  | { 
+      success: false; 
+      message: string; 
+      statusCode: number; 
+    };
+
+export const refreshTokenService = async (refreshToken: string): Promise<RefreshTokenResponse> => {
   if (!refreshToken) {
-    throw new Error("Refresh token required");
+    return { success: false, message: "Refresh token required", statusCode: 401 };
   }
 
   const storedToken = await prisma.userToken.findUnique({
@@ -16,24 +36,24 @@ export const refreshTokenService = async (refreshToken: string) => {
   if (!storedToken) {
     // Token already rotated or revoked
     console.warn(`[RefreshTokenService] Token not found or already used: ${refreshToken.substring(0, 10)}...`);
-    return null;
+    return { success: false, message: "Refresh token invalid or already used", statusCode: 401 };
   }
 
   if (storedToken.expiresAt < new Date()) {
     await prisma.userToken.deleteMany({
       where: { refreshToken },
     });
-    throw new Error("Refresh token expired");
+    return { success: false, message: "Refresh token expired", statusCode: 401 };
   }
 
   try {
     jwt.verify(refreshToken, JWT_CONFIG.REFRESH_SECRET);
   } catch {
-    throw new Error("Invalid refresh token");
+    return { success: false, message: "Invalid refresh token", statusCode: 401 };
   }
 
   if (!storedToken.user.isVerified) {
-    throw new Error("User not verified");
+    return { success: false, message: "User not verified", statusCode: 403 };
   }
 
   const newAccessToken = generateAccessToken(storedToken.userId);
@@ -54,14 +74,17 @@ export const refreshTokenService = async (refreshToken: string) => {
   ]);
 
   return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-    user: {
-      id: storedToken.user.id,
-      email: storedToken.user.email,
-      name: storedToken.user.name,
-      hasCompletedPref: storedToken.user.hasCompletedPref
-    },
+    success: true,
+    data: {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: storedToken.user.id,
+        email: storedToken.user.email,
+        name: storedToken.user.name,
+        hasCompletedPref: storedToken.user.hasCompletedPref
+      }
+    }
   };
 };
 

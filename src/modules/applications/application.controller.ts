@@ -63,7 +63,7 @@ export const updateApplicationStatusController = async (
     const updated = await updateApplicationStatusService({
       applicationId,
       newStatusKey,
-      interviewDate,
+      interviewDate: interviewDate ? new Date(interviewDate) : undefined,
     });
 
     res.json({ success: true, data: updated });

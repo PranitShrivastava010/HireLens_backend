@@ -20,6 +20,7 @@ model User {
   password            String
   isVerified          Boolean  @default(false)
   hasCompletedPref    Boolean @default(false)
+  weeklyGoal          Int     @default(10)
   createdAt           DateTime @default(now())
 
   rolePreferences     UserRolePreference[]

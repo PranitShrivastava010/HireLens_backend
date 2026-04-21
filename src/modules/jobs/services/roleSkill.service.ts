@@ -57,16 +57,17 @@ TASK:
   const completion = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
     messages: [{ role: "user", content: prompt }],
-    temperature: 0.2,
+    temperature: 0.1,
   });
 
   const raw = completion.choices[0]?.message?.content;
   if (!raw) return { roles: [], skills: [] };
 
-  const parsed = extractJSON(raw)
-
-  if(!parsed){
-    console.log("📢 failed to parse AI response", raw)
+  const parsed = extractJSON(raw);
+  
+  if (!parsed) {
+    console.log("📢 failed to parse AI response", raw);
+    return { roles: [], skills: [] };
   }
 
   const rolesRaw: string[] = Array.isArray(parsed.roles) ? parsed.roles : [];

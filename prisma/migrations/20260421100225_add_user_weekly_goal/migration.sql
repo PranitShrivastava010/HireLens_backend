@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "weeklyGoal" INTEGER NOT NULL DEFAULT 10;
