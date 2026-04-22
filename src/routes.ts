@@ -4,6 +4,7 @@ import jobRoutes from "./modules/jobs/jobs.routes"
 import applicationRoutes from "./modules/applications/application.routes"
 import resumeRoutes from "./modules/resume/resume.routes"
 import dashboardRoutes from "./modules/dashboard/dashboard.routes"
+import cronRoutes from "./modules/cron/cron.routes"
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use("/job", jobRoutes)
 router.use("/application", applicationRoutes)
 router.use("/resume", resumeRoutes)
 router.use("/dashboard", dashboardRoutes)
+router.use("/cron", cronRoutes)
 
 export default router;  

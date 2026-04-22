@@ -40,7 +40,7 @@
 
 ---
 
-### TASK-B-04 — Add Dashboard Stats API & Goal Tracking 🔲
+### TASK-B-04 — Add Dashboard Stats API & Goal Tracking ✅
 **Problem:** Dashboard is empty. We need structured data for three specific charts: Weekly Progress (Progress against goal), Application Summary (Donut), and Weekly Activity (Bar).  
 **Goal:** Implement `GET /api/dashboard/stats` and `PATCH /api/dashboard/goal`.  
 **New Schema Field:** Add `weeklyGoal` (Int, default: 10) to `User` model.  

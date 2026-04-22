@@ -1,5 +1,20 @@
 {
   "version": 2,
+  "functions": {
+    "index.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/fetch-jobs",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/enrich-jobs",
+      "schedule": "20 * * * *"
+    }
+  ],
   "builds": [
     {
       "src": "index.ts",

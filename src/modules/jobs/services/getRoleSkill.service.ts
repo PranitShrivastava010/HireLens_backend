@@ -1,3 +1,4 @@
+import { Role, Skill } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 
 export const getRoleSkillService = async ({
@@ -26,12 +27,12 @@ export const getRoleSkillService = async ({
   ]);
 
   return [
-    ...roles.map((r) => ({
+    ...roles.map((r: Role) => ({
       type: "role" as const,
       label: r.name,
       value: r.slug,
     })),
-    ...skills.map((s) => ({
+    ...skills.map((s: Skill) => ({
       type: "skill" as const,
       label: s.name,
       value: s.slug,

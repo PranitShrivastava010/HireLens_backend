@@ -94,6 +94,12 @@ model Jobs {
   applyStatus            Boolean  @default(false)
 
   lastFetchedAt          DateTime @default(now())
+  enrichmentStatus       JobEnrichmentStatus @default(PENDING)
+  enrichmentQueuedAt     DateTime @default(now())
+  enrichmentStartedAt    DateTime?
+  enrichedAt             DateTime?
+  enrichmentAttempts     Int      @default(0)
+  enrichmentLastError    String?
 
   createdAt              DateTime @default(now())
 
@@ -112,12 +118,55 @@ model Jobs {
   @@index([maxSalary])
   @@index([minExperienceYears])
   @@index([maxExperienceYears])
+  @@index([enrichmentStatus, enrichmentQueuedAt])
 }
 
 enum SalaryPeriod {
   HOUR
   MONTH
   YEAR
+}
+
+enum FetchCategory {
+  ENGINEERING
+  PRODUCT
+  HR
+  DATA
+  DESIGN
+  SALES
+  MARKETING
+  OPERATIONS
+  FINANCE
+}
+
+enum JobEnrichmentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum JobPipelineStage {
+  FETCH
+  ENRICH
+}
+
+enum FetchRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum FetchTriggerType {
+  CRON
+  MANUAL
+}
+
+enum JobFetchRunItemType {
+  TARGET
+  JOB
 }
 
 model Role {
@@ -129,6 +178,7 @@ model Role {
   aliases        RoleAlias[]
   jobs           JobRole[]
   rolePreferences UserRolePreference[]
+  fetchTargets   JobFetchTargetRole[]
 }
 
 model RoleAlias {
@@ -200,6 +250,87 @@ model UserSkillPreference {
   skill         Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@id([userId, skillId])
+}
+
+model JobFetchTarget {
+  id                  String   @id @default(uuid())
+  name                String   @unique
+  query               String   @unique
+  category            FetchCategory?
+  isActive            Boolean  @default(true)
+  priority            Int      @default(100)
+  demandScore         Int      @default(0)
+  refreshEveryMinutes Int      @default(360)
+  lastFetchedAt       DateTime?
+  nextRunAt           DateTime?
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  failureCount        Int      @default(0)
+  cooldownUntil       DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  roles               JobFetchTargetRole[]
+  runItems            JobFetchRunItem[]
+
+  @@index([isActive, nextRunAt])
+  @@index([priority, demandScore])
+}
+
+model JobFetchTargetRole {
+  targetId        String
+  roleId          String
+
+  target          JobFetchTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  role            Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([targetId, roleId])
+}
+
+model JobFetchRun {
+  id              String           @id @default(uuid())
+  stage           JobPipelineStage @default(FETCH)
+  status          FetchRunStatus   @default(RUNNING)
+  triggerType     FetchTriggerType @default(CRON)
+  startedAt       DateTime         @default(now())
+  endedAt         DateTime?
+  durationMs      Int?
+  itemsPlanned    Int              @default(0)
+  itemsProcessed  Int              @default(0)
+  jobsFetched     Int              @default(0)
+  jobsCreated     Int              @default(0)
+  jobsUpdated     Int              @default(0)
+  jobsFailed      Int              @default(0)
+  errorMessage    String?
+  createdAt       DateTime         @default(now())
+
+  items           JobFetchRunItem[]
+
+  @@index([stage, startedAt])
+}
+
+model JobFetchRunItem {
+  id              String              @id @default(uuid())
+  runId           String
+  targetId        String?
+  itemType        JobFetchRunItemType @default(TARGET)
+  label           String
+  query           String?
+  status          FetchRunStatus      @default(RUNNING)
+  startedAt       DateTime            @default(now())
+  endedAt         DateTime?
+  durationMs      Int?
+  jobsFetched     Int                 @default(0)
+  jobsCreated     Int                 @default(0)
+  jobsUpdated     Int                 @default(0)
+  jobsFailed      Int                 @default(0)
+  errorMessage    String?
+
+  run             JobFetchRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  target          JobFetchTarget?     @relation(fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([runId])
+  @@index([targetId])
 }
 
 model ApplicationStatus {

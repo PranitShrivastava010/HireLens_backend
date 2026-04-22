@@ -6,7 +6,7 @@ export const jobPreferenceSchema = z.object({
 });
 
 export const fetchJobsSchema = z.object({
-  query: z.string().optional(),
+  query: z.string().min(1, "Query is required"),
   page: z.number().int().min(1).optional(),
 });
 

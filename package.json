@@ -9,7 +9,7 @@
     "postinstall": "prisma generate"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "node -r ts-node/register prisma/seed.ts"
   },
   "keywords": [],
   "author": "",

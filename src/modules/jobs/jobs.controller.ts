@@ -14,25 +14,18 @@ const prisma = new PrismaClient();
 
 export const fetchJobsController = async (req: Request, res: Response) => {
   try {
-    const { query, page } = req.query;
+    const { query, page } = req.body;
 
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        message: "Query is required",
-      });
-    }
-
-    const count = await fetchJobsFromApi(
-      query as string,
-      Number(page) || 1
-    );
+    const result = await fetchJobsFromApi(query, {
+      page: typeof page === "number" ? page : 1,
+      enrichmentMode: "inline",
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       code: SUCCESS_MESSAGES.JOBS_FETCHED.code,
       message: SUCCESS_MESSAGES.JOBS_FETCHED.message,
-      Count: count
+      data: result,
     });
   } catch (error) {
     console.error(error);
