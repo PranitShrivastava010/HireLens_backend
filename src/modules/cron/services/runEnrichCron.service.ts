@@ -7,13 +7,15 @@ import {
 import { prisma } from "../../../lib/prisma";
 import { enrichPendingJobs } from "../../jobs/services/enrichPendingJobs.service";
 import { acquireCronLock, releaseCronLock } from "./cronLock.service";
-import { getPositiveInt } from "./scheduler.utils";
+import { getPositiveInt, withRetry } from "./scheduler.utils";
 
 const ENRICH_LOCK_KEY = "cron:job-enrich:lock";
 
 type RunEnrichCronOptions = {
   triggerType?: FetchTriggerType;
 };
+
+type JobFetchRunRecord = Awaited<ReturnType<typeof prisma.jobFetchRun.create>>;
 
 const logEnrichCronError = (message: string, error: unknown, meta?: Record<string, unknown>) => {
   console.error("[enrich cron]", message, {
@@ -53,17 +55,19 @@ export const runEnrichCron = async ({
   const lock = await acquireCronLock(ENRICH_LOCK_KEY, lockTtlSeconds);
 
   if (!lock.acquired) {
-    const skippedRun = await prisma.jobFetchRun.create({
-      data: {
-        stage: JobPipelineStage.ENRICH,
-        triggerType,
-        status: FetchRunStatus.SKIPPED,
-        startedAt,
-        endedAt: new Date(),
-        durationMs: 0,
-        errorMessage: "Skipped because an enrich cron lock is already active",
-      },
-    });
+    const skippedRun: JobFetchRunRecord = await withRetry(() =>
+      prisma.jobFetchRun.create({
+        data: {
+          stage: JobPipelineStage.ENRICH,
+          triggerType,
+          status: FetchRunStatus.SKIPPED,
+          startedAt,
+          endedAt: new Date(),
+          durationMs: 0,
+          errorMessage: "Skipped because an enrich cron lock is already active",
+        },
+      })
+    );
 
     return {
       runId: skippedRun.id,
@@ -72,16 +76,21 @@ export const runEnrichCron = async ({
     };
   }
 
-  const run = await prisma.jobFetchRun.create({
-    data: {
-      stage: JobPipelineStage.ENRICH,
-      triggerType,
-      status: FetchRunStatus.RUNNING,
-      startedAt,
-    },
-  });
+  let runId: string | null = null;
 
   try {
+    const run: JobFetchRunRecord = await withRetry(() =>
+      prisma.jobFetchRun.create({
+        data: {
+          stage: JobPipelineStage.ENRICH,
+          triggerType,
+          status: FetchRunStatus.RUNNING,
+          startedAt,
+        },
+      })
+    );
+    runId = run.id;
+
     const enrichmentResult = await enrichPendingJobs({
       limit: batchSize,
       concurrency,
@@ -140,7 +149,7 @@ export const runEnrichCron = async ({
 
     if (failedRunItems.length) {
       logEnrichCronError("Failed to persist some enrich run items", null, {
-        runId: run.id,
+        runId,
         failures: failedRunItems.map((result) =>
           result.status === "rejected" ? result.reason : undefined
         ),
@@ -179,18 +188,20 @@ export const runEnrichCron = async ({
     const errorMessage = error instanceof Error ? error.message : "Enrich cron failed";
 
     logEnrichCronError("Run failed before completion", error, {
-      runId: run.id,
+      runId,
     });
 
-    await prisma.jobFetchRun.update({
-      where: { id: run.id },
-      data: {
-        status: FetchRunStatus.FAILED,
-        endedAt,
-        durationMs: endedAt.getTime() - startedAt.getTime(),
-        errorMessage,
-      },
-    });
+    if (runId) {
+      await prisma.jobFetchRun.update({
+        where: { id: runId },
+        data: {
+          status: FetchRunStatus.FAILED,
+          endedAt,
+          durationMs: endedAt.getTime() - startedAt.getTime(),
+          errorMessage,
+        },
+      });
+    }
 
     throw error;
   } finally {

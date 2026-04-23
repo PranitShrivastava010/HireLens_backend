@@ -14,6 +14,7 @@ import {
   calculateBackoffMinutes,
   chunkArray,
   getPositiveInt,
+  withRetry,
 } from "./scheduler.utils";
 
 const FETCH_LOCK_KEY = "cron:job-fetch:lock";
@@ -29,6 +30,8 @@ type FetchTargetRunResult = {
   jobsUpdated: number;
   jobsFailed: number;
 };
+
+type JobFetchRunRecord = Awaited<ReturnType<typeof prisma.jobFetchRun.create>>;
 
 const logFetchCronError = (message: string, error: unknown, meta?: Record<string, unknown>) => {
   console.error("[fetch cron]", message, {
@@ -68,17 +71,19 @@ export const runFetchCron = async ({
   const lock = await acquireCronLock(FETCH_LOCK_KEY, lockTtlSeconds);
 
   if (!lock.acquired) {
-    const skippedRun = await prisma.jobFetchRun.create({
-      data: {
-        stage: JobPipelineStage.FETCH,
-        triggerType,
-        status: FetchRunStatus.SKIPPED,
-        startedAt,
-        endedAt: new Date(),
-        durationMs: 0,
-        errorMessage: "Skipped because a fetch cron lock is already active",
-      },
-    });
+    const skippedRun: JobFetchRunRecord = await withRetry(() =>
+      prisma.jobFetchRun.create({
+        data: {
+          stage: JobPipelineStage.FETCH,
+          triggerType,
+          status: FetchRunStatus.SKIPPED,
+          startedAt,
+          endedAt: new Date(),
+          durationMs: 0,
+          errorMessage: "Skipped because a fetch cron lock is already active",
+        },
+      })
+    );
 
     return {
       runId: skippedRun.id,
@@ -87,16 +92,21 @@ export const runFetchCron = async ({
     };
   }
 
-  const run = await prisma.jobFetchRun.create({
-    data: {
-      stage: JobPipelineStage.FETCH,
-      triggerType,
-      status: FetchRunStatus.RUNNING,
-      startedAt,
-    },
-  });
+  let runId: string | null = null;
 
   try {
+    const run: JobFetchRunRecord = await withRetry(() =>
+      prisma.jobFetchRun.create({
+        data: {
+          stage: JobPipelineStage.FETCH,
+          triggerType,
+          status: FetchRunStatus.RUNNING,
+          startedAt,
+        },
+      })
+    );
+    runId = run.id;
+
     try {
       await refreshFetchTargetDemandScores();
     } catch (error) {
@@ -104,23 +114,25 @@ export const runFetchCron = async ({
     }
 
     const now = new Date();
-    const dueTargets: JobFetchTarget[] = await prisma.jobFetchTarget.findMany({
-      where: {
-        isActive: true,
-        OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
-        AND: [
-          {
-            OR: [{ cooldownUntil: null }, { cooldownUntil: { lte: now } }],
-          },
+    const dueTargets: JobFetchTarget[] = await withRetry(() =>
+      prisma.jobFetchTarget.findMany({
+        where: {
+          isActive: true,
+          OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
+          AND: [
+            {
+              OR: [{ cooldownUntil: null }, { cooldownUntil: { lte: now } }],
+            },
+          ],
+        },
+        orderBy: [
+          { priority: "desc" },
+          { demandScore: "desc" },
+          { lastFetchedAt: "asc" },
         ],
-      },
-      orderBy: [
-        { priority: "desc" },
-        { demandScore: "desc" },
-        { lastFetchedAt: "asc" },
-      ],
-      take: batchSize,
-    });
+        take: batchSize,
+      })
+    );
 
     if (!dueTargets.length) {
       const endedAt = new Date();
@@ -333,18 +345,20 @@ export const runFetchCron = async ({
     const errorMessage = error instanceof Error ? error.message : "Fetch cron failed";
 
     logFetchCronError("Run failed before completion", error, {
-      runId: run.id,
+      runId,
     });
 
-    await prisma.jobFetchRun.update({
-      where: { id: run.id },
-      data: {
-        status: FetchRunStatus.FAILED,
-        endedAt,
-        durationMs: endedAt.getTime() - startedAt.getTime(),
-        errorMessage,
-      },
-    });
+    if (runId) {
+      await prisma.jobFetchRun.update({
+        where: { id: runId },
+        data: {
+          status: FetchRunStatus.FAILED,
+          endedAt,
+          durationMs: endedAt.getTime() - startedAt.getTime(),
+          errorMessage,
+        },
+      });
+    }
 
     throw error;
   } finally {

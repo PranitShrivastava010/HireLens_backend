@@ -1,5 +1,6 @@
 import { JobEnrichmentStatus } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
+import { withRetry } from "../../cron/services/scheduler.utils";
 import { enrichJobById } from "./enrichJob.service";
 
 type EnrichPendingJobsOptions = {
@@ -37,25 +38,27 @@ export const enrichPendingJobs = async ({
   limit = 10,
   concurrency = 2,
 }: EnrichPendingJobsOptions = {}): Promise<EnrichPendingJobsResult> => {
-  const jobs: Array<{ id: string; title: string }> = await prisma.jobs.findMany({
-    where: {
-      enrichmentStatus: {
-        in: [JobEnrichmentStatus.PENDING, JobEnrichmentStatus.FAILED],
+  const jobs: Array<{ id: string; title: string }> = await withRetry(() =>
+    prisma.jobs.findMany({
+      where: {
+        enrichmentStatus: {
+          in: [JobEnrichmentStatus.PENDING, JobEnrichmentStatus.FAILED],
+        },
+        enrichmentAttempts: {
+          lt: 5,
+        },
       },
-      enrichmentAttempts: {
-        lt: 5,
+      orderBy: [
+        { enrichmentQueuedAt: "asc" },
+        { lastFetchedAt: "desc" },
+      ],
+      select: {
+        id: true,
+        title: true,
       },
-    },
-    orderBy: [
-      { enrichmentQueuedAt: "asc" },
-      { lastFetchedAt: "desc" },
-    ],
-    select: {
-      id: true,
-      title: true,
-    },
-    take: limit,
-  });
+      take: limit,
+    })
+  );
 
   const processedJobs: EnrichPendingJobsResult["processedJobs"] = [];
 
