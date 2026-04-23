@@ -30,6 +30,13 @@ type FetchTargetRunResult = {
   jobsFailed: number;
 };
 
+const logFetchCronError = (message: string, error: unknown, meta?: Record<string, unknown>) => {
+  console.error("[fetch cron]", message, {
+    ...(meta ?? {}),
+    error,
+  });
+};
+
 const determineRunStatus = (
   successes: number,
   failures: number,
@@ -90,7 +97,11 @@ export const runFetchCron = async ({
   });
 
   try {
-    await refreshFetchTargetDemandScores();
+    try {
+      await refreshFetchTargetDemandScores();
+    } catch (error) {
+      logFetchCronError("Demand score refresh failed; continuing with existing scores", error);
+    }
 
     const now = new Date();
     const dueTargets: JobFetchTarget[] = await prisma.jobFetchTarget.findMany({
@@ -144,19 +155,22 @@ export const runFetchCron = async ({
       const batchResults = await Promise.all(
         batch.map(async (target) => {
           const itemStartedAt = new Date();
-          const runItem = await prisma.jobFetchRunItem.create({
-            data: {
-              runId: run.id,
-              targetId: target.id,
-              itemType: JobFetchRunItemType.TARGET,
-              label: target.name,
-              query: target.query,
-              status: FetchRunStatus.RUNNING,
-              startedAt: itemStartedAt,
-            },
-          });
+          let runItemId: string | null = null;
 
           try {
+            const runItem = await prisma.jobFetchRunItem.create({
+              data: {
+                runId: run.id,
+                targetId: target.id,
+                itemType: JobFetchRunItemType.TARGET,
+                label: target.name,
+                query: target.query,
+                status: FetchRunStatus.RUNNING,
+                startedAt: itemStartedAt,
+              },
+            });
+            runItemId = runItem.id;
+
             const fetchResult = await fetchJobsFromApi(target.query, {
               page: 1,
               enrichmentMode: "queue",
@@ -164,29 +178,48 @@ export const runFetchCron = async ({
 
             const itemEndedAt = new Date();
 
-            await prisma.jobFetchRunItem.update({
-              where: { id: runItem.id },
-              data: {
-                status: FetchRunStatus.SUCCESS,
-                endedAt: itemEndedAt,
-                durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
-                jobsFetched: fetchResult.totalFetched,
-                jobsCreated: fetchResult.jobsCreated,
-                jobsUpdated: fetchResult.jobsUpdated,
-                jobsFailed: fetchResult.jobsFailed,
-              },
-            });
+            const successUpdates = await Promise.allSettled([
+              prisma.jobFetchRunItem.update({
+                where: { id: runItem.id },
+                data: {
+                  status: FetchRunStatus.SUCCESS,
+                  endedAt: itemEndedAt,
+                  durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
+                  jobsFetched: fetchResult.totalFetched,
+                  jobsCreated: fetchResult.jobsCreated,
+                  jobsUpdated: fetchResult.jobsUpdated,
+                  jobsFailed: fetchResult.jobsFailed,
+                },
+              }),
+              prisma.jobFetchTarget.update({
+                where: { id: target.id },
+                data: {
+                  lastFetchedAt: itemEndedAt,
+                  lastSuccessAt: itemEndedAt,
+                  failureCount: 0,
+                  cooldownUntil: null,
+                  nextRunAt: addMinutes(itemEndedAt, target.refreshEveryMinutes),
+                },
+              }),
+            ]);
 
-            await prisma.jobFetchTarget.update({
-              where: { id: target.id },
-              data: {
-                lastFetchedAt: itemEndedAt,
-                lastSuccessAt: itemEndedAt,
-                failureCount: 0,
-                cooldownUntil: null,
-                nextRunAt: addMinutes(itemEndedAt, target.refreshEveryMinutes),
-              },
-            });
+            const failedSuccessUpdates = successUpdates.filter(
+              (result) => result.status === "rejected"
+            );
+
+            if (failedSuccessUpdates.length) {
+              logFetchCronError(
+                "Processed target but failed to persist all success metadata",
+                null,
+                {
+                  targetId: target.id,
+                  targetName: target.name,
+                  failures: failedSuccessUpdates.map((result) =>
+                    result.status === "rejected" ? result.reason : undefined
+                  ),
+                }
+              );
+            }
 
             return {
               status: FetchRunStatus.SUCCESS,
@@ -201,33 +234,56 @@ export const runFetchCron = async ({
             const errorMessage =
               error instanceof Error ? error.message : "Fetch cron item failed";
 
-            await prisma.jobFetchRunItem.update({
-              where: { id: runItem.id },
-              data: {
-                status: FetchRunStatus.FAILED,
-                endedAt: itemEndedAt,
-                durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
-                jobsFailed: 1,
-                errorMessage,
-              },
+            logFetchCronError("Target processing failed", error, {
+              targetId: target.id,
+              targetName: target.name,
+              query: target.query,
             });
 
-            await prisma.jobFetchTarget.update({
-              where: { id: target.id },
-              data: {
-                lastFetchedAt: itemEndedAt,
-                lastFailureAt: itemEndedAt,
-                failureCount,
-                cooldownUntil: addMinutes(
-                  itemEndedAt,
-                  calculateBackoffMinutes(failureCount)
+            const failureUpdates = await Promise.allSettled([
+              runItemId
+                ? prisma.jobFetchRunItem.update({
+                    where: { id: runItemId },
+                    data: {
+                      status: FetchRunStatus.FAILED,
+                      endedAt: itemEndedAt,
+                      durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
+                      jobsFailed: 1,
+                      errorMessage,
+                    },
+                  })
+                : Promise.resolve(null),
+              prisma.jobFetchTarget.update({
+                where: { id: target.id },
+                data: {
+                  lastFetchedAt: itemEndedAt,
+                  lastFailureAt: itemEndedAt,
+                  failureCount,
+                  cooldownUntil: addMinutes(
+                    itemEndedAt,
+                    calculateBackoffMinutes(failureCount)
+                  ),
+                  nextRunAt: addMinutes(
+                    itemEndedAt,
+                    calculateBackoffMinutes(failureCount)
+                  ),
+                },
+              }),
+            ]);
+
+            const failedFailureUpdates = failureUpdates.filter(
+              (result) => result.status === "rejected"
+            );
+
+            if (failedFailureUpdates.length) {
+              logFetchCronError("Failed to persist target failure metadata", null, {
+                targetId: target.id,
+                targetName: target.name,
+                failures: failedFailureUpdates.map((result) =>
+                  result.status === "rejected" ? result.reason : undefined
                 ),
-                nextRunAt: addMinutes(
-                  itemEndedAt,
-                  calculateBackoffMinutes(failureCount)
-                ),
-              },
-            });
+              });
+            }
 
             return {
               status: FetchRunStatus.FAILED,
@@ -276,6 +332,10 @@ export const runFetchCron = async ({
     const endedAt = new Date();
     const errorMessage = error instanceof Error ? error.message : "Fetch cron failed";
 
+    logFetchCronError("Run failed before completion", error, {
+      runId: run.id,
+    });
+
     await prisma.jobFetchRun.update({
       where: { id: run.id },
       data: {
@@ -288,6 +348,12 @@ export const runFetchCron = async ({
 
     throw error;
   } finally {
-    await releaseCronLock(FETCH_LOCK_KEY);
+    try {
+      await releaseCronLock(FETCH_LOCK_KEY);
+    } catch (error) {
+      logFetchCronError("Failed to release fetch cron lock", error, {
+        lockKey: FETCH_LOCK_KEY,
+      });
+    }
   }
 };

@@ -35,6 +35,8 @@ const authorizeCronRequest = (req: Request, res: Response) => {
 const handleCronError = (res: Response, stage: JobPipelineStage, error: unknown) => {
   const message = error instanceof Error ? error.message : `Failed to run ${stage} cron`;
 
+  console.error(`[${stage} cron] request failed`, error);
+
   res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
     success: false,
     code: "CRON_RUN_FAILED",

@@ -17,7 +17,7 @@ export const refreshFetchTargetDemandScores = async () => {
     },
   });
 
-  await Promise.all(
+  const updates = await Promise.allSettled(
     targets.map(async (target) => {
       const roleIds = target.roles.map((role) => role.roleId);
       const demandScore = roleIds.length
@@ -40,4 +40,15 @@ export const refreshFetchTargetDemandScores = async () => {
       });
     })
   );
+
+  const failures = updates.filter((result) => result.status === "rejected");
+
+  if (failures.length) {
+    console.error(
+      `[fetch cron] failed to refresh demand scores for ${failures.length} target(s)`,
+      failures.map((result) =>
+        result.status === "rejected" ? result.reason : undefined
+      )
+    );
+  }
 };

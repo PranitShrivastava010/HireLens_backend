@@ -15,6 +15,13 @@ type RunEnrichCronOptions = {
   triggerType?: FetchTriggerType;
 };
 
+const logEnrichCronError = (message: string, error: unknown, meta?: Record<string, unknown>) => {
+  console.error("[enrich cron]", message, {
+    ...(meta ?? {}),
+    error,
+  });
+};
+
 const determineRunStatus = (
   successes: number,
   failures: number,
@@ -107,7 +114,7 @@ export const runEnrichCron = async ({
       },
     });
 
-    await Promise.all(
+    const runItemResults = await Promise.allSettled(
       enrichmentResult.processedJobs.map((job) =>
         prisma.jobFetchRunItem.create({
           data: {
@@ -128,6 +135,17 @@ export const runEnrichCron = async ({
         })
       )
     );
+
+    const failedRunItems = runItemResults.filter((result) => result.status === "rejected");
+
+    if (failedRunItems.length) {
+      logEnrichCronError("Failed to persist some enrich run items", null, {
+        runId: run.id,
+        failures: failedRunItems.map((result) =>
+          result.status === "rejected" ? result.reason : undefined
+        ),
+      });
+    }
 
     const endedAt = new Date();
     const status = determineRunStatus(
@@ -160,6 +178,10 @@ export const runEnrichCron = async ({
     const endedAt = new Date();
     const errorMessage = error instanceof Error ? error.message : "Enrich cron failed";
 
+    logEnrichCronError("Run failed before completion", error, {
+      runId: run.id,
+    });
+
     await prisma.jobFetchRun.update({
       where: { id: run.id },
       data: {
@@ -172,6 +194,12 @@ export const runEnrichCron = async ({
 
     throw error;
   } finally {
-    await releaseCronLock(ENRICH_LOCK_KEY);
+    try {
+      await releaseCronLock(ENRICH_LOCK_KEY);
+    } catch (error) {
+      logEnrichCronError("Failed to release enrich cron lock", error, {
+        lockKey: ENRICH_LOCK_KEY,
+      });
+    }
   }
 };
