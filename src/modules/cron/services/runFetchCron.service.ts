@@ -40,6 +40,10 @@ const logFetchCronError = (message: string, error: unknown, meta?: Record<string
   });
 };
 
+const ensureFetchDatabaseReady = async () => {
+  await withRetry(() => prisma.$queryRawUnsafe("SELECT 1"));
+};
+
 const determineRunStatus = (
   successes: number,
   failures: number,
@@ -95,6 +99,8 @@ export const runFetchCron = async ({
   let runId: string | null = null;
 
   try {
+    await ensureFetchDatabaseReady();
+
     const run: JobFetchRunRecord = await withRetry(() =>
       prisma.jobFetchRun.create({
         data: {

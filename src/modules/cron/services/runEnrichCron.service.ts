@@ -24,6 +24,10 @@ const logEnrichCronError = (message: string, error: unknown, meta?: Record<strin
   });
 };
 
+const ensureEnrichDatabaseReady = async () => {
+  await withRetry(() => prisma.$queryRawUnsafe("SELECT 1"));
+};
+
 const determineRunStatus = (
   successes: number,
   failures: number,
@@ -79,6 +83,8 @@ export const runEnrichCron = async ({
   let runId: string | null = null;
 
   try {
+    await ensureEnrichDatabaseReady();
+
     const run: JobFetchRunRecord = await withRetry(() =>
       prisma.jobFetchRun.create({
         data: {
