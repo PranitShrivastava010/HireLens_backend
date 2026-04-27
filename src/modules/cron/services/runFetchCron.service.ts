@@ -1,5 +1,6 @@
 import {
   FetchRunStatus,
+  Prisma,
   FetchTriggerType,
   JobFetchTarget,
   JobFetchRunItemType,
@@ -32,6 +33,7 @@ type FetchTargetRunResult = {
 };
 
 type JobFetchRunRecord = Awaited<ReturnType<typeof prisma.jobFetchRun.create>>;
+type JobFetchRunItemRecord = Awaited<ReturnType<typeof prisma.jobFetchRunItem.create>>;
 
 const logFetchCronError = (message: string, error: unknown, meta?: Record<string, unknown>) => {
   console.error("[fetch cron]", message, {
@@ -41,7 +43,97 @@ const logFetchCronError = (message: string, error: unknown, meta?: Record<string
 };
 
 const ensureFetchDatabaseReady = async () => {
-  await withRetry(() => prisma.$queryRawUnsafe("SELECT 1"));
+  await withRetry(
+    async () => {
+      await prisma.$connect();
+      await prisma.$queryRawUnsafe("SELECT 1");
+    },
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
+};
+
+const updateFetchRunWithRetry = async (
+  runId: string,
+  data: Prisma.JobFetchRunUpdateArgs["data"]
+) => {
+  return withRetry(
+    () =>
+      prisma.jobFetchRun.update({
+        where: { id: runId },
+        data,
+      }),
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
+};
+
+const createFetchRunWithRetry = (
+  data: Prisma.JobFetchRunCreateArgs["data"]
+): Promise<JobFetchRunRecord> => {
+  return withRetry(
+    () =>
+      prisma.jobFetchRun.create({
+        data,
+      }),
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
+};
+
+const createFetchRunItemWithRetry = (
+  data: Prisma.JobFetchRunItemCreateArgs["data"]
+): Promise<JobFetchRunItemRecord> => {
+  return withRetry(
+    () =>
+      prisma.jobFetchRunItem.create({
+        data,
+      }),
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
+};
+
+const updateFetchRunItemWithRetry = (
+  runItemId: string,
+  data: Prisma.JobFetchRunItemUpdateArgs["data"]
+) => {
+  return withRetry(
+    () =>
+      prisma.jobFetchRunItem.update({
+        where: { id: runItemId },
+        data,
+      }),
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
+};
+
+const updateFetchTargetWithRetry = (
+  targetId: string,
+  data: Prisma.JobFetchTargetUpdateArgs["data"]
+) => {
+  return withRetry(
+    () =>
+      prisma.jobFetchTarget.update({
+        where: { id: targetId },
+        data,
+      }),
+    {
+      attempts: 5,
+      delayMs: 2000,
+    }
+  );
 };
 
 const determineRunStatus = (
@@ -75,19 +167,15 @@ export const runFetchCron = async ({
   const lock = await acquireCronLock(FETCH_LOCK_KEY, lockTtlSeconds);
 
   if (!lock.acquired) {
-    const skippedRun: JobFetchRunRecord = await withRetry(() =>
-      prisma.jobFetchRun.create({
-        data: {
-          stage: JobPipelineStage.FETCH,
-          triggerType,
-          status: FetchRunStatus.SKIPPED,
-          startedAt,
-          endedAt: new Date(),
-          durationMs: 0,
-          errorMessage: "Skipped because a fetch cron lock is already active",
-        },
-      })
-    );
+    const skippedRun: JobFetchRunRecord = await createFetchRunWithRetry({
+      stage: JobPipelineStage.FETCH,
+      triggerType,
+      status: FetchRunStatus.SKIPPED,
+      startedAt,
+      endedAt: new Date(),
+      durationMs: 0,
+      errorMessage: "Skipped because a fetch cron lock is already active",
+    });
 
     return {
       runId: skippedRun.id,
@@ -101,16 +189,12 @@ export const runFetchCron = async ({
   try {
     await ensureFetchDatabaseReady();
 
-    const run: JobFetchRunRecord = await withRetry(() =>
-      prisma.jobFetchRun.create({
-        data: {
-          stage: JobPipelineStage.FETCH,
-          triggerType,
-          status: FetchRunStatus.RUNNING,
-          startedAt,
-        },
-      })
-    );
+    const run: JobFetchRunRecord = await createFetchRunWithRetry({
+      stage: JobPipelineStage.FETCH,
+      triggerType,
+      status: FetchRunStatus.RUNNING,
+      startedAt,
+    });
     runId = run.id;
 
     try {
@@ -120,37 +204,39 @@ export const runFetchCron = async ({
     }
 
     const now = new Date();
-    const dueTargets: JobFetchTarget[] = await withRetry(() =>
-      prisma.jobFetchTarget.findMany({
-        where: {
-          isActive: true,
-          OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
-          AND: [
-            {
-              OR: [{ cooldownUntil: null }, { cooldownUntil: { lte: now } }],
-            },
+    const dueTargets: JobFetchTarget[] = await withRetry(
+      () =>
+        prisma.jobFetchTarget.findMany({
+          where: {
+            isActive: true,
+            OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
+            AND: [
+              {
+                OR: [{ cooldownUntil: null }, { cooldownUntil: { lte: now } }],
+              },
+            ],
+          },
+          orderBy: [
+            { priority: "desc" },
+            { demandScore: "desc" },
+            { lastFetchedAt: "asc" },
           ],
-        },
-        orderBy: [
-          { priority: "desc" },
-          { demandScore: "desc" },
-          { lastFetchedAt: "asc" },
-        ],
-        take: batchSize,
-      })
+          take: batchSize,
+        }),
+      {
+        attempts: 5,
+        delayMs: 2000,
+      }
     );
 
     if (!dueTargets.length) {
       const endedAt = new Date();
 
-      await prisma.jobFetchRun.update({
-        where: { id: run.id },
-        data: {
-          status: FetchRunStatus.SKIPPED,
-          endedAt,
-          durationMs: endedAt.getTime() - startedAt.getTime(),
-          errorMessage: "No due fetch targets were available",
-        },
+      await updateFetchRunWithRetry(run.id, {
+        status: FetchRunStatus.SKIPPED,
+        endedAt,
+        durationMs: endedAt.getTime() - startedAt.getTime(),
+        errorMessage: "No due fetch targets were available",
       });
 
       return {
@@ -160,12 +246,16 @@ export const runFetchCron = async ({
       };
     }
 
-    await prisma.jobFetchRun.update({
-      where: { id: run.id },
-      data: {
+    try {
+      await updateFetchRunWithRetry(run.id, {
         itemsPlanned: dueTargets.length,
-      },
-    });
+      });
+    } catch (error) {
+      logFetchCronError("Failed to persist planned-item count; continuing", error, {
+        runId: run.id,
+        dueTargets: dueTargets.length,
+      });
+    }
 
     const results: FetchTargetRunResult[] = [];
 
@@ -176,48 +266,47 @@ export const runFetchCron = async ({
           let runItemId: string | null = null;
 
           try {
-            const runItem = await prisma.jobFetchRunItem.create({
-              data: {
-                runId: run.id,
-                targetId: target.id,
-                itemType: JobFetchRunItemType.TARGET,
-                label: target.name,
-                query: target.query,
-                status: FetchRunStatus.RUNNING,
-                startedAt: itemStartedAt,
-              },
+            const runItem = await createFetchRunItemWithRetry({
+              runId: run.id,
+              targetId: target.id,
+              itemType: JobFetchRunItemType.TARGET,
+              label: target.name,
+              query: target.query,
+              status: FetchRunStatus.RUNNING,
+              startedAt: itemStartedAt,
             });
             runItemId = runItem.id;
 
-            const fetchResult = await fetchJobsFromApi(target.query, {
-              page: 1,
-              enrichmentMode: "queue",
-            });
+            const fetchResult = await withRetry(
+              () =>
+                fetchJobsFromApi(target.query, {
+                  page: 1,
+                  enrichmentMode: "queue",
+                }),
+              {
+                attempts: 3,
+                delayMs: 1500,
+              }
+            );
 
             const itemEndedAt = new Date();
 
             const successUpdates = await Promise.allSettled([
-              prisma.jobFetchRunItem.update({
-                where: { id: runItem.id },
-                data: {
-                  status: FetchRunStatus.SUCCESS,
-                  endedAt: itemEndedAt,
-                  durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
-                  jobsFetched: fetchResult.totalFetched,
-                  jobsCreated: fetchResult.jobsCreated,
-                  jobsUpdated: fetchResult.jobsUpdated,
-                  jobsFailed: fetchResult.jobsFailed,
-                },
+              updateFetchRunItemWithRetry(runItem.id, {
+                status: FetchRunStatus.SUCCESS,
+                endedAt: itemEndedAt,
+                durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
+                jobsFetched: fetchResult.totalFetched,
+                jobsCreated: fetchResult.jobsCreated,
+                jobsUpdated: fetchResult.jobsUpdated,
+                jobsFailed: fetchResult.jobsFailed,
               }),
-              prisma.jobFetchTarget.update({
-                where: { id: target.id },
-                data: {
-                  lastFetchedAt: itemEndedAt,
-                  lastSuccessAt: itemEndedAt,
-                  failureCount: 0,
-                  cooldownUntil: null,
-                  nextRunAt: addMinutes(itemEndedAt, target.refreshEveryMinutes),
-                },
+              updateFetchTargetWithRetry(target.id, {
+                lastFetchedAt: itemEndedAt,
+                lastSuccessAt: itemEndedAt,
+                failureCount: 0,
+                cooldownUntil: null,
+                nextRunAt: addMinutes(itemEndedAt, target.refreshEveryMinutes),
               }),
             ]);
 
@@ -260,32 +349,26 @@ export const runFetchCron = async ({
 
             const failureUpdates = await Promise.allSettled([
               runItemId
-                ? prisma.jobFetchRunItem.update({
-                    where: { id: runItemId },
-                    data: {
-                      status: FetchRunStatus.FAILED,
-                      endedAt: itemEndedAt,
-                      durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
-                      jobsFailed: 1,
-                      errorMessage,
-                    },
+                ? updateFetchRunItemWithRetry(runItemId, {
+                    status: FetchRunStatus.FAILED,
+                    endedAt: itemEndedAt,
+                    durationMs: itemEndedAt.getTime() - itemStartedAt.getTime(),
+                    jobsFailed: 1,
+                    errorMessage,
                   })
                 : Promise.resolve(null),
-              prisma.jobFetchTarget.update({
-                where: { id: target.id },
-                data: {
-                  lastFetchedAt: itemEndedAt,
-                  lastFailureAt: itemEndedAt,
-                  failureCount,
-                  cooldownUntil: addMinutes(
-                    itemEndedAt,
-                    calculateBackoffMinutes(failureCount)
-                  ),
-                  nextRunAt: addMinutes(
-                    itemEndedAt,
-                    calculateBackoffMinutes(failureCount)
-                  ),
-                },
+              updateFetchTargetWithRetry(target.id, {
+                lastFetchedAt: itemEndedAt,
+                lastFailureAt: itemEndedAt,
+                failureCount,
+                cooldownUntil: addMinutes(
+                  itemEndedAt,
+                  calculateBackoffMinutes(failureCount)
+                ),
+                nextRunAt: addMinutes(
+                  itemEndedAt,
+                  calculateBackoffMinutes(failureCount)
+                ),
               }),
             ]);
 
@@ -330,14 +413,11 @@ export const runFetchCron = async ({
       jobsFailed: results.reduce((sum, result) => sum + result.jobsFailed, 0),
     };
 
-    await prisma.jobFetchRun.update({
-      where: { id: run.id },
-      data: {
-        status,
-        endedAt,
-        durationMs: endedAt.getTime() - startedAt.getTime(),
-        ...summary,
-      },
+    await updateFetchRunWithRetry(run.id, {
+      status,
+      endedAt,
+      durationMs: endedAt.getTime() - startedAt.getTime(),
+      ...summary,
     });
 
     return {
@@ -355,15 +435,23 @@ export const runFetchCron = async ({
     });
 
     if (runId) {
-      await prisma.jobFetchRun.update({
-        where: { id: runId },
-        data: {
+      const failureUpdate = await Promise.allSettled([
+        updateFetchRunWithRetry(runId, {
           status: FetchRunStatus.FAILED,
           endedAt,
           durationMs: endedAt.getTime() - startedAt.getTime(),
           errorMessage,
-        },
-      });
+        }),
+      ]);
+
+      if (failureUpdate.some((result) => result.status === "rejected")) {
+        logFetchCronError("Failed to persist fetch run failure summary", null, {
+          runId,
+          failures: failureUpdate.map((result) =>
+            result.status === "rejected" ? result.reason : undefined
+          ),
+        });
+      }
     }
 
     throw error;

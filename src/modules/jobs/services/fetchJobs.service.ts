@@ -8,6 +8,7 @@ import { extractLocationFromDescription } from "../../../utils/extractLocation";
 import { enrichJobById } from "./enrichJob.service";
 
 const RAPID_API_URL = "https://jsearch.p.rapidapi.com/search";
+const DEFAULT_FETCH_API_TIMEOUT_MS = 10000;
 
 export type JobEnrichmentMode = "inline" | "queue" | "skip";
 
@@ -34,6 +35,42 @@ const shouldInlineEnrich = (isNewJob: boolean, status: JobEnrichmentStatus) => {
   return isNewJob || status !== JobEnrichmentStatus.COMPLETED;
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableFetchApiError = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  const status = error.response?.status;
+
+  if (!status) {
+    return true;
+  }
+
+  return status === 429 || status >= 500;
+};
+
+const requestJobsWithRetry = async (options: Parameters<typeof axios.request>[0]) => {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await axios.request(options);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === 3 || !isRetryableFetchApiError(error)) {
+        throw error;
+      }
+
+      await sleep(1000 * attempt);
+    }
+  }
+
+  throw lastError;
+};
+
 export const fetchJobsFromApi = async (
   query: string,
   { page = 1, enrichmentMode = "inline" }: FetchJobsOptions = {}
@@ -41,6 +78,7 @@ export const fetchJobsFromApi = async (
   const options = {
     method: "GET",
     url: RAPID_API_URL,
+    timeout: DEFAULT_FETCH_API_TIMEOUT_MS,
     params: {
       query,
       page,
@@ -54,7 +92,7 @@ export const fetchJobsFromApi = async (
     },
   };
 
-  const response = await axios.request(options);
+  const response = await requestJobsWithRetry(options);
   const jobs = response.data?.data || [];
 
   let jobsCreated = 0;

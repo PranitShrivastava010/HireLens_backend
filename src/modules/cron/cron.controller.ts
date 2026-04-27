@@ -5,7 +5,9 @@ import { runEnrichCron } from "./services/runEnrichCron.service";
 import { runFetchCron } from "./services/runFetchCron.service";
 
 const getTriggerType = (req: Request) => {
-  return req.get("user-agent") === "vercel-cron/1.0"
+  const userAgent = req.get("user-agent")?.toLowerCase() ?? "";
+
+  return userAgent === "vercel-cron/1.0" || userAgent.includes("cron-job.org")
     ? FetchTriggerType.CRON
     : FetchTriggerType.MANUAL;
 };
