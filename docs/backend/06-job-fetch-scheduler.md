@@ -9,7 +9,7 @@ The main goal is:
 - keep the job feed fresh without any frontend trigger
 - support broad job families like HR, Product, Engineering, Data, Design, Sales, and Marketing
 - avoid slow "fetch every role and every skill" runs
-- work safely on Vercel serverless deployment
+- work safely on Vercel serverless deployment using an external scheduler
 
 This document is the design reference for TASK-B-05.
 
@@ -23,16 +23,23 @@ That means:
 
 - the app is not an always-on Node.js process
 - in-process schedulers like `node-cron` are not reliable in production
-- cron execution should be triggered by Vercel Cron, not by server startup
+- cron execution should be triggered by an external scheduler, not by server startup
 
 So the production model should be:
 
 ```text
-Vercel Cron
+GitHub Actions schedule
   -> GET /api/cron/fetch-jobs
   -> shared fetch runner
   -> DB + logs + scheduling updates
 ```
+
+For this project, GitHub Actions is the recommended scheduler because:
+
+- it is free for this showcase use case
+- it supports scheduled workflows and manual runs
+- it avoids the shorter timeout behavior that caused issues with `cron-job.org`
+- it works well with Vercel-hosted HTTP cron endpoints
 
 For local development, the same route can be triggered manually with Postman or `curl`.
 
@@ -124,7 +131,7 @@ Recommended split:
 ## High-Level Flow
 
 ```text
-Vercel Cron fires
+GitHub Actions scheduled workflow fires
   -> calls GET /api/cron/fetch-jobs
   -> route acquires global lock
   -> create JobFetchRun record
@@ -279,7 +286,7 @@ Important:
 
 The recommended production schedule is:
 
-- Vercel cron trigger: every hour
+- GitHub Actions scheduled workflow: every hour
 - target refresh interval: usually every 6 hours
 
 This does not mean every target runs every hour.
@@ -602,9 +609,52 @@ Responsibilities:
 
 The actual scheduler logic should live in a normal service so it can be reused for:
 
-- Vercel cron
+- GitHub Actions scheduled workflow
 - local manual testing
 - admin-triggered manual runs
+
+---
+
+## Recommended Production Scheduler
+
+HireLens should use GitHub Actions as the scheduler for production.
+
+### Why GitHub Actions is the recommended scheduler
+
+- GitHub Actions can call the deployed Vercel backend over HTTP
+- scheduled workflows support both automatic runs and manual `Run workflow` testing
+- the workflow timeout is much more suitable for fetch and enrich work than `cron-job.org`
+- it keeps Vercel focused on serving the backend while GitHub handles scheduling
+
+### Workflow files
+
+Current production scheduler files:
+
+- `.github/workflows/fetch-cron.yml`
+- `.github/workflows/enrich-cron.yml`
+
+### GitHub Actions schedules
+
+- fetch workflow: `0 * * * *`
+- enrich workflow: `20 * * * *`
+
+These cron expressions run in `UTC`.
+
+### Required GitHub Actions configuration
+
+In the GitHub repository:
+
+- add repository variable `CRON_BASE_URL`
+- add repository secret `CRON_SECRET`
+
+Recommended values:
+
+- `CRON_BASE_URL=https://your-backend.vercel.app`
+- `CRON_SECRET=<same value as backend CRON_SECRET on Vercel>`
+
+### Manual testing
+
+Because both workflows also include `workflow_dispatch`, they can be tested manually from the GitHub Actions tab before relying on the schedule.
 
 ---
 
@@ -634,7 +684,7 @@ What changes:
 
 - scheduling should no longer rely on the frontend calling `/api/job/fetch`
 - scheduler source should be `JobFetchTarget`, not raw roles or skills
-- production triggering should be Vercel Cron, not `node-cron`
+- production triggering should be GitHub Actions scheduled workflows, not `node-cron`
 
 ---
 
@@ -645,7 +695,7 @@ Implement TASK-B-05 using this architecture:
 1. add `JobFetchTarget`, `JobFetchRun`, and `JobFetchRunItem`
 2. seed broad canonical fetch targets
 3. expose `GET /api/cron/fetch-jobs`
-4. schedule it hourly with Vercel Cron
+4. schedule it hourly with GitHub Actions
 5. process only a small batch of due targets per run
 6. add a second enrichment cron for jobs missing role or skill mappings
 7. use role/skill extraction for enrichment and ranking, not as direct scheduler targets
