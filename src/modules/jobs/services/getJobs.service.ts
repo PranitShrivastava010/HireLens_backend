@@ -13,15 +13,60 @@ interface GetJobsParams {
   limit?: number;
 }
 
-type JobWithRelations = Jobs & {
-  jobSkills: JobSkill[];
-  jobRoles: JobRole[];
+type JobWithRelations = Pick<
+  Jobs,
+  | "id"
+  | "title"
+  | "description"
+  | "companyName"
+  | "companyLogo"
+  | "location"
+  | "city"
+  | "state"
+  | "employmentType"
+  | "isRemote"
+  | "postedAtUtc"
+  | "minExperienceYears"
+  | "maxExperienceYears"
+  | "minSalary"
+  | "maxSalary"
+  | "applyStatus"
+> & {
+  jobSkills: Array<Pick<JobSkill, "skillId">>;
+  jobRoles: Array<Pick<JobRole, "roleId">>;
   applications: {
     status: {
       key: string;
       label: string;
     };
   }[];
+};
+
+const CACHE_TTL_SECONDS = 600;
+const CACHE_TIMEOUT_MS = Number(process.env.REDIS_TIMEOUT_MS ?? 200);
+const MIN_CANDIDATE_POOL = 100;
+const MAX_CANDIDATE_POOL = 300;
+const CANDIDATE_POOL_MULTIPLIER = 5;
+
+const resolveWithin = async <T>(
+  operation: Promise<T>,
+  fallback: T,
+  timeoutMs: number
+): Promise<T> => {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 };
 
 export const getJobsService = async ({
@@ -33,8 +78,11 @@ export const getJobsService = async ({
   limit = 10,
 }: GetJobsParams) => {
   const skip = (page - 1) * limit;
+  const candidatePoolSize = Math.min(
+    MAX_CANDIDATE_POOL,
+    Math.max(MIN_CANDIDATE_POOL, page * limit * CANDIDATE_POOL_MULTIPLIER)
+  );
 
-  /* 1️⃣ User preferences */
   const [userSkills, userRoles] = await Promise.all([
     prisma.userSkillPreference.findMany({
       where: { userId },
@@ -46,44 +94,48 @@ export const getJobsService = async ({
     }),
   ]);
 
-  const skillIds = userSkills.map((s: { skillId: string }) => s.skillId);
-  const roleIds = userRoles.map((r: { roleId: string }) => r.roleId);
+  const skillIds = userSkills.map((skill) => skill.skillId);
+  const roleIds = userRoles.map((role) => role.roleId);
 
-  /* 2️⃣ Aliases */
   const [skillAliases, roleAliases] = await Promise.all([
-    prisma.skillAlias.findMany({
-      where: { skillId: { in: skillIds } },
-      select: { alias: true },
-    }),
-    prisma.roleAlias.findMany({
-      where: { roleId: { in: roleIds } },
-      select: { alias: true },
-    }),
+    skillIds.length
+      ? prisma.skillAlias.findMany({
+          where: { skillId: { in: skillIds } },
+          select: { alias: true },
+        })
+      : Promise.resolve([]),
+    roleIds.length
+      ? prisma.roleAlias.findMany({
+          where: { roleId: { in: roleIds } },
+          select: { alias: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const skillAliasSet = new Set<string>(
-    skillAliases.map((a: { alias: string }) => a.alias.toLowerCase())
+  const skillAliasSet = new Set(
+    skillAliases.map((aliasRecord) => aliasRecord.alias.toLowerCase())
+  );
+  const roleAliasSet = new Set(
+    roleAliases.map((aliasRecord) => aliasRecord.alias.toLowerCase())
   );
 
-  const roleAliasSet = new Set<string>(
-    roleAliases.map((a: { alias: string }) => a.alias.toLowerCase())
-  );
-
-  const prefHash = [
-    skillIds.sort().join(","),
-    roleIds.sort().join(","),
-  ].join("|");
-
+  const prefHash = [skillIds.sort().join(","), roleIds.sort().join(",")].join("|");
   const cachedKey = `job:feed:${userId}:${prefHash}:page:${page}:limit:${limit}:search:${search ?? "all"}:location:${location ?? "all"}:remote:${isRemote ?? "all"}`;
 
   try {
-    const cached = await redis.get(cachedKey);
-    if (cached) return cached;
+    const cached = await resolveWithin(
+      redis.get(cachedKey),
+      null,
+      CACHE_TIMEOUT_MS
+    );
+
+    if (cached) {
+      return cached;
+    }
   } catch (error) {
     console.warn("Redis error on get:", error);
   }
 
-  /* 3️⃣ Hard filters */
   const where: any = {
     lastFetchedAt: { gte: subDays(new Date(), 30) },
   };
@@ -103,90 +155,135 @@ export const getJobsService = async ({
     where.isRemote = isRemote;
   }
 
-  /* 4️⃣ Candidate pool */
   const candidateJobs = (await prisma.jobs.findMany({
     where,
-    take: 300,
+    take: candidatePoolSize,
     orderBy: [{ postedAtUtc: "desc" }, { lastFetchedAt: "desc" }],
-    include: { jobSkills: true, jobRoles: true, applications: { include: { status: {select: {key: true, label: true}} } } },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      companyName: true,
+      companyLogo: true,
+      location: true,
+      city: true,
+      state: true,
+      employmentType: true,
+      isRemote: true,
+      postedAtUtc: true,
+      minExperienceYears: true,
+      maxExperienceYears: true,
+      minSalary: true,
+      maxSalary: true,
+      applyStatus: true,
+      jobSkills: {
+        select: {
+          skillId: true,
+        },
+      },
+      jobRoles: {
+        select: {
+          roleId: true,
+        },
+      },
+      applications: {
+        where: { userId },
+        take: 1,
+        select: {
+          status: {
+            select: {
+              key: true,
+              label: true,
+            },
+          },
+        },
+      },
+    },
   })) as JobWithRelations[];
 
   const skillIdSet = new Set(skillIds);
   const roleIdSet = new Set(roleIds);
 
-  /* 5️⃣ Scoring */
-  const scoredJobs = candidateJobs.map((job: JobWithRelations) => {
+  const scoredJobs = candidateJobs.map((job) => {
     let score = 0;
     const title = job.title.toLowerCase();
-    const description = job.description?.toLowerCase() ?? "";
+    const description = job.description.toLowerCase();
 
-    for (const js of job.jobSkills) {
-      if (skillIdSet.has(js.skillId)) score += 10;
+    for (const jobSkill of job.jobSkills) {
+      if (skillIdSet.has(jobSkill.skillId)) {
+        score += 10;
+      }
     }
 
-    for (const jr of job.jobRoles) {
-      if (roleIdSet.has(jr.roleId)) score += 8;
+    for (const jobRole of job.jobRoles) {
+      if (roleIdSet.has(jobRole.roleId)) {
+        score += 8;
+      }
     }
 
     for (const alias of skillAliasSet) {
-      if (title.includes(alias)) score += 5;
-      if (description.includes(alias)) score += 3;
+      if (title.includes(alias)) {
+        score += 5;
+      }
+
+      if (description.includes(alias)) {
+        score += 3;
+      }
     }
 
     for (const alias of roleAliasSet) {
-      if (title.includes(alias)) score += 4;
+      if (title.includes(alias)) {
+        score += 4;
+      }
     }
 
     if (job.postedAtUtc) {
       const age = differenceInDays(new Date(), job.postedAtUtc);
-      if (age <= 3) score += 2;
+
+      if (age <= 3) {
+        score += 2;
+      }
     }
 
     return { ...job, relevanceScore: score };
   });
 
-  /* 6️⃣ Sort + paginate */
-  scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  scoredJobs.sort((left, right) => right.relevanceScore - left.relevanceScore);
 
   const paginated = scoredJobs.slice(skip, skip + limit);
 
-
-  /* 7️⃣ Response */
   const response = {
-    jobs: paginated.map(
-      (job: JobWithRelations & { relevanceScore: number }) => {
-        // Get application status if it exists
-        const applicationStatus = job.applications.length > 0 ? job.applications[0].status : null;
-        
-        const jobData: any = {
-          id: job.id,
-          title: job.title,
-          companyName: job.companyName,
-          companyLogo: job.companyLogo,
-          location: job.location,
-          city: job.city,
-          state: job.state,
-          employmentType: job.employmentType,
-          isRemote: job.isRemote,
-          postedAtUtc: job.postedAtUtc,
-          minExperienceYears: job.minExperienceYears,
-          maxExperienceYears: job.maxExperienceYears,
-          minSalary: job.minSalary,
-          maxSalary: job.maxSalary,
-          applyStatus: job.applyStatus,
+    jobs: paginated.map((job) => {
+      const applicationStatus =
+        job.applications.length > 0 ? job.applications[0].status : null;
+
+      const jobData: any = {
+        id: job.id,
+        title: job.title,
+        companyName: job.companyName,
+        companyLogo: job.companyLogo,
+        location: job.location,
+        city: job.city,
+        state: job.state,
+        employmentType: job.employmentType,
+        isRemote: job.isRemote,
+        postedAtUtc: job.postedAtUtc,
+        minExperienceYears: job.minExperienceYears,
+        maxExperienceYears: job.maxExperienceYears,
+        minSalary: job.minSalary,
+        maxSalary: job.maxSalary,
+        applyStatus: job.applyStatus,
+      };
+
+      if (applicationStatus) {
+        jobData.applicationStatus = {
+          key: applicationStatus.key,
+          label: applicationStatus.label,
         };
-
-        // Add application status label if application exists
-        if (applicationStatus) {
-          jobData.applicationStatus = {
-            key: applicationStatus.key,
-            label: applicationStatus.label,
-          };
-        }
-
-        return jobData;
       }
-    ),
+
+      return jobData;
+    }),
     meta: {
       total: scoredJobs.length,
       page,
@@ -196,10 +293,14 @@ export const getJobsService = async ({
   };
 
   try {
-    await redis.set(cachedKey, response, { ex: 600 });
+    await resolveWithin(
+      redis.set(cachedKey, response, { ex: CACHE_TTL_SECONDS }),
+      null,
+      CACHE_TIMEOUT_MS
+    );
   } catch (error) {
     console.warn("Redis error on set:", error);
   }
 
-  return response
+  return response;
 };

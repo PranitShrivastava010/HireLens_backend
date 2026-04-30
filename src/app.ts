@@ -2,8 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import routes from "./routes";
-// import { errorHandler } from "../src/middlewares/error.middleware";
-import cookieParser from "cookie-parser"
+import cookieParser from "cookie-parser";
 
 const app = express();
 
@@ -24,33 +23,51 @@ const allowedOrigins = new Set([
   ...configuredOrigins,
 ]);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow non-browser clients like GitHub Actions, Postman, and server-to-server calls.
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
+const slowRequestThresholdMs = Number(process.env.SLOW_REQUEST_MS ?? 1000);
+const logAllRequests = process.env.LOG_ALL_REQUESTS === "true";
 
-    if (allowedOrigins.has(origin)) {
-      callback(null, true);
-      return;
-    }
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
 
-    callback(new Error(`Origin ${origin} is not allowed by CORS`));
-  },
-  credentials: true,
-}));
+      if (allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json());
+app.use(cookieParser());
 
-app.use(cookieParser())
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
 
-app.get("/", (req, res) => {
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+    if (logAllRequests || durationMs >= slowRequestThresholdMs) {
+      console.log(
+        `${req.method} ${req.originalUrl} -> ${res.statusCode} in ${durationMs.toFixed(1)}ms`
+      );
+    }
+  });
+
+  next();
+});
+
+app.get("/", (_req, res) => {
   res.json({ status: "HireLens backend running" });
 });
 
 app.use("/api", routes);
-
-// app.use(errorHandler);
 
 export default app;

@@ -1,7 +1,6 @@
 // src/modules/jobs/jobs.controller.ts
 import { Request, Response } from "express";
 import { fetchJobsFromApi } from "./services/fetchJobs.service";
-import { PrismaClient } from "@prisma/client";
 import { getJobsService } from "./services/getJobs.service";
 import { getJobByIdService } from "./services/getJobsById.service";
 import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
@@ -9,8 +8,7 @@ import { fetchJobKeywordsService } from "./services/fetchJobsKeywords.service";
 import { getRoleSkillService } from "./services/getRoleSkill.service";
 import { saveUserPreferencesService } from "./services/userPreference.service";
 import { getUserPreferencesService } from "./services/getPreference.service";
-
-const prisma = new PrismaClient();
+import { prisma } from "../../lib/prisma";
 
 export const fetchJobsController = async (req: Request, res: Response) => {
   try {

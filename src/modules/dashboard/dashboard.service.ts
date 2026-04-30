@@ -4,131 +4,151 @@ import { startOfWeek, endOfWeek, eachDayOfInterval, format, isSameDay } from "da
 export const getDashboardStatsService = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { weeklyGoal: true }
+    select: { weeklyGoal: true },
   });
 
-  if (!user) throw new Error("User not found");
+  if (!user) {
+    throw new Error("User not found");
+  }
 
   const now = new Date();
-  // date-fns startOfWeek default is Sunday (0). We want Monday (1).
   const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
   const endOfCurrentWeek = endOfWeek(now, { weekStartsOn: 1 });
 
-  // 1. Weekly Progress
-  const applicationsThisWeek = await prisma.jobApplication.findMany({
-    where: {
-      userId,
-      appliedAt: {
-        gte: startOfCurrentWeek,
-        lte: endOfCurrentWeek,
+  const [
+    applicationsThisWeek,
+    statuses,
+    counts,
+    upcomingInterviews,
+    recentApplications,
+  ] = await Promise.all([
+    prisma.jobApplication.findMany({
+      where: {
+        userId,
+        appliedAt: {
+          gte: startOfCurrentWeek,
+          lte: endOfCurrentWeek,
+        },
       },
-    },
-  });
+      select: {
+        appliedAt: true,
+        status: {
+          select: {
+            key: true,
+          },
+        },
+      },
+    }),
+    prisma.applicationStatus.findMany({
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.jobApplication.groupBy({
+      by: ["statusId"],
+      where: { userId },
+      _count: {
+        _all: true,
+      },
+    }),
+    prisma.jobApplication.findMany({
+      where: {
+        userId,
+        status: { key: "INTERVIEW" },
+        interviewDate: { gte: now },
+      },
+      select: {
+        interviewDate: true,
+        job: {
+          select: {
+            title: true,
+            companyName: true,
+          },
+        },
+      },
+      orderBy: { interviewDate: "asc" },
+      take: 5,
+    }),
+    prisma.jobApplication.findMany({
+      where: { userId },
+      select: {
+        appliedAt: true,
+        job: {
+          select: {
+            title: true,
+            companyName: true,
+          },
+        },
+        status: {
+          select: {
+            label: true,
+          },
+        },
+      },
+      orderBy: { appliedAt: "desc" },
+      take: 5,
+    }),
+  ]);
 
-  const appliedThisWeekCount = applicationsThisWeek.length;
+  const appliedThisWeekCount = applicationsThisWeek.filter(
+    (application) => application.status.key === "APPLIED"
+  ).length;
   const weeklyGoal = user.weeklyGoal || 10;
-  const percentage = Math.min(Math.round((appliedThisWeekCount / weeklyGoal) * 100), 100);
+  const percentage = Math.min(
+    Math.round((appliedThisWeekCount / weeklyGoal) * 100),
+    100
+  );
 
-  // 2. Status Summary
-  const statuses = await prisma.applicationStatus.findMany({
-    orderBy: { sortOrder: 'asc' }
-  });
+  const statusSummary = statuses.map((status) => {
+    const statusCount = counts.find((count) => count.statusId === status.id);
 
-  const counts = await prisma.jobApplication.groupBy({
-    by: ['statusId'],
-    where: { userId },
-    _count: {
-      _all: true
-    }
-  });
-
-  const statusSummary = statuses.map((s: any) => {
-    const statusCount = counts.find((c: any) => c.statusId === s.id);
     return {
-      key: s.key,
-      label: s.label,
-      count: statusCount?._count._all || 0
+      key: status.key,
+      label: status.label,
+      count: statusCount?._count._all || 0,
     };
   });
 
-  // 3. Weekly Activity (Monday to Sunday)
   const days = eachDayOfInterval({
     start: startOfCurrentWeek,
     end: endOfCurrentWeek,
   });
 
   const weeklyActivity: Record<string, number> = {};
-  days.forEach(day => {
+
+  for (const day of days) {
     const dayName = format(day, "eeee").toLowerCase();
-    const count = applicationsThisWeek.filter((app: any) => isSameDay(new Date(app.appliedAt), day)).length;
+    const count = applicationsThisWeek.filter((application) =>
+      isSameDay(new Date(application.appliedAt), day)
+    ).length;
+
     weeklyActivity[dayName] = count;
-  });
-
-  // 4. Upcoming Interviews
-  const upcomingInterviews = await prisma.jobApplication.findMany({
-    where: {
-      userId,
-      status: { key: "INTERVIEW" },
-      interviewDate: { gte: now }
-    },
-    include: {
-      job: {
-        select: {
-          title: true,
-          companyName: true
-        }
-      }
-    },
-    orderBy: { interviewDate: 'asc' },
-    take: 5
-  });
-
-  // 5. Recent Applications
-  const recentApplications = await prisma.jobApplication.findMany({
-    where: { userId },
-    include: {
-      job: {
-        select: {
-          title: true,
-          companyName: true
-        }
-      },
-      status: {
-        select: {
-          label: true
-        }
-      }
-    },
-    orderBy: { appliedAt: 'desc' },
-    take: 5
-  });
+  }
 
   return {
     weeklyProgress: {
       appliedThisWeek: appliedThisWeekCount,
       weeklyGoal,
-      percentage
+      percentage,
     },
     statusSummary,
     weeklyActivity,
-    upcomingInterviews: upcomingInterviews.map((i: any) => ({
-      jobTitle: i.job.title,
-      companyName: i.job.companyName,
-      interviewDate: i.interviewDate
+    upcomingInterviews: upcomingInterviews.map((interview) => ({
+      jobTitle: interview.job.title,
+      companyName: interview.job.companyName,
+      interviewDate: interview.interviewDate,
     })),
-    recentApplications: recentApplications.map((a: any) => ({
-      jobTitle: a.job.title,
-      companyName: a.job.companyName,
-      status: a.status.label,
-      appliedAt: a.appliedAt
-    }))
+    recentApplications: recentApplications.map((application) => ({
+      jobTitle: application.job.title,
+      companyName: application.job.companyName,
+      status: application.status.label,
+      appliedAt: application.appliedAt,
+    })),
   };
 };
 
 export const updateWeeklyGoalService = async (userId: string, goal: number) => {
-  return await prisma.user.update({
+  return prisma.user.update({
     where: { id: userId },
     data: { weeklyGoal: goal },
-    select: { weeklyGoal: true }
+    select: { weeklyGoal: true },
   });
 };

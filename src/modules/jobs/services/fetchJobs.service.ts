@@ -37,7 +37,11 @@ const shouldInlineEnrich = (isNewJob: boolean, status: JobEnrichmentStatus) => {
   return isNewJob || status !== JobEnrichmentStatus.COMPLETED;
 };
 
-type ExistingFetchedJobRecord = Awaited<ReturnType<typeof prisma.jobs.findMany>>;
+type ExistingFetchedJobRecord = Array<{
+  id: string;
+  providerJobId: string;
+  enrichmentStatus: JobEnrichmentStatus;
+}>;
 type UpsertedFetchedJobRecord = Awaited<ReturnType<typeof prisma.jobs.upsert>>;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -22,7 +22,8 @@ export const verifyOtpService = async (email: string, otp: string) => {
     select: {
       id: true,
       email: true,
-      name: true
+      name: true,
+      hasCompletedPref: true,
     }
   });
 
