@@ -3,8 +3,15 @@ import { prisma } from "../../../lib/prisma";
 export const getUserJobApplicationsService = async (userId: string) => {
   const applications = await prisma.jobApplication.findMany({
     where: { userId },
-    include: {
-      status: true,
+    select: {
+      id: true,
+      appliedAt: true,
+      interviewDate: true,
+      status: {
+        select: {
+          key: true,
+        },
+      },
       job: {
         select: {
           id: true,
@@ -17,22 +24,23 @@ export const getUserJobApplicationsService = async (userId: string) => {
     orderBy: { appliedAt: "desc" },
   });
 
-  // Group by status.key
   const board: Record<string, any[]> = {};
 
-  for (const app of applications) {
-    const key = app.status.key;
+  for (const application of applications) {
+    const key = application.status.key;
 
-    if (!board[key]) board[key] = [];
+    if (!board[key]) {
+      board[key] = [];
+    }
 
     board[key].push({
-      applicationId: app.id,
-      jobId: app.job.id,
-      jobTitle: app.job.title,
-      companyName: app.job.companyName,
-      companyLogo: app.job.companyLogo,
-      appliedAt: app.appliedAt,
-      interviewDate: app.interviewDate,
+      applicationId: application.id,
+      jobId: application.job.id,
+      jobTitle: application.job.title,
+      companyName: application.job.companyName,
+      companyLogo: application.job.companyLogo,
+      appliedAt: application.appliedAt,
+      interviewDate: application.interviewDate,
     });
   }
 

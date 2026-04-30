@@ -2,10 +2,15 @@ import { prisma } from "../../lib/prisma";
 import { startOfWeek, endOfWeek, eachDayOfInterval, format, isSameDay } from "date-fns";
 
 export const getDashboardStatsService = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { weeklyGoal: true },
-  });
+  const [user, statuses] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { weeklyGoal: true },
+    }),
+    prisma.applicationStatus.findMany({
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
   if (!user) {
     throw new Error("User not found");
@@ -14,10 +19,12 @@ export const getDashboardStatsService = async (userId: string) => {
   const now = new Date();
   const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
   const endOfCurrentWeek = endOfWeek(now, { weekStartsOn: 1 });
+  const interviewStatusId = statuses.find(
+    (status) => status.key === "INTERVIEW"
+  )?.id;
 
   const [
     applicationsThisWeek,
-    statuses,
     counts,
     upcomingInterviews,
     recentApplications,
@@ -39,9 +46,6 @@ export const getDashboardStatsService = async (userId: string) => {
         },
       },
     }),
-    prisma.applicationStatus.findMany({
-      orderBy: { sortOrder: "asc" },
-    }),
     prisma.jobApplication.groupBy({
       by: ["statusId"],
       where: { userId },
@@ -49,24 +53,26 @@ export const getDashboardStatsService = async (userId: string) => {
         _all: true,
       },
     }),
-    prisma.jobApplication.findMany({
-      where: {
-        userId,
-        status: { key: "INTERVIEW" },
-        interviewDate: { gte: now },
-      },
-      select: {
-        interviewDate: true,
-        job: {
-          select: {
-            title: true,
-            companyName: true,
+    interviewStatusId
+      ? prisma.jobApplication.findMany({
+          where: {
+            userId,
+            statusId: interviewStatusId,
+            interviewDate: { gte: now },
           },
-        },
-      },
-      orderBy: { interviewDate: "asc" },
-      take: 5,
-    }),
+          select: {
+            interviewDate: true,
+            job: {
+              select: {
+                title: true,
+                companyName: true,
+              },
+            },
+          },
+          orderBy: { interviewDate: "asc" },
+          take: 5,
+        })
+      : Promise.resolve([]),
     prisma.jobApplication.findMany({
       where: { userId },
       select: {

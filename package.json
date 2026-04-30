@@ -5,6 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn --transpile-only index.local.ts",
+    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "migrate:deploy": "prisma migrate deploy",
     "build": "prisma generate",
     "postinstall": "prisma generate"
   },

@@ -114,6 +114,8 @@ model Jobs {
   @@index([location])
   @@index([isRemote])
   @@index([postedAtUtc])
+  @@index([postedAtUtc, lastFetchedAt])
+  @@index([lastFetchedAt])
   @@index([minSalary])
   @@index([maxSalary])
   @@index([minExperienceYears])
@@ -189,6 +191,7 @@ model RoleAlias {
   role          Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@index([alias])
+  @@index([roleId])
 }
 
 model Skill {
@@ -210,6 +213,7 @@ model SkillAlias {
   skill          Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([alias])
+  @@index([skillId])
 }
 
 model JobRole {
@@ -363,6 +367,8 @@ model JobApplication {
 
   @@unique([userId, jobId])
   @@index([statusId])
+  @@index([userId, appliedAt])
+  @@index([userId, statusId, interviewDate])
 }
 
 model JobKeyword {

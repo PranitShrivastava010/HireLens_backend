@@ -78,6 +78,7 @@ export const getJobsService = async ({
   limit = 10,
 }: GetJobsParams) => {
   const skip = (page - 1) * limit;
+  const freshnessCutoff = subDays(new Date(), 30);
   const candidatePoolSize = Math.min(
     MAX_CANDIDATE_POOL,
     Math.max(MIN_CANDIDATE_POOL, page * limit * CANDIDATE_POOL_MULTIPLIER)
@@ -136,24 +137,40 @@ export const getJobsService = async ({
     console.warn("Redis error on get:", error);
   }
 
-  const where: any = {
-    lastFetchedAt: { gte: subDays(new Date(), 30) },
-  };
+  const filters: any[] = [
+    {
+      OR: [
+        { postedAtUtc: { gte: freshnessCutoff } },
+        {
+          postedAtUtc: null,
+          lastFetchedAt: { gte: freshnessCutoff },
+        },
+      ],
+    },
+  ];
 
   if (search) {
-    where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { companyName: { contains: search, mode: "insensitive" } },
-    ];
+    filters.push({
+      OR: [
+        { title: { contains: search, mode: "insensitive" } },
+        { companyName: { contains: search, mode: "insensitive" } },
+      ],
+    });
   }
 
   if (location) {
-    where.location = { contains: location, mode: "insensitive" };
+    filters.push({
+      location: { contains: location, mode: "insensitive" },
+    });
   }
 
   if (isRemote !== undefined) {
-    where.isRemote = isRemote;
+    filters.push({
+      isRemote,
+    });
   }
+
+  const where: any = filters.length === 1 ? filters[0] : { AND: filters };
 
   const candidateJobs = (await prisma.jobs.findMany({
     where,

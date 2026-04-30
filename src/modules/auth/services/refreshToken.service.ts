@@ -3,9 +3,9 @@ import { prisma } from "../../../lib/prisma";
 import { JWT_CONFIG } from "../../../config/jwtConfig";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
 
-export type RefreshTokenResponse = 
-  | { 
-      success: true; 
+export type RefreshTokenResponse =
+  | {
+      success: true;
       data: {
         accessToken: string;
         refreshToken: string;
@@ -17,30 +17,53 @@ export type RefreshTokenResponse =
         };
       };
     }
-  | { 
-      success: false; 
-      message: string; 
-      statusCode: number; 
+  | {
+      success: false;
+      message: string;
+      statusCode: number;
     };
 
-export const refreshTokenService = async (refreshToken: string): Promise<RefreshTokenResponse> => {
+export const refreshTokenService = async (
+  refreshToken: string
+): Promise<RefreshTokenResponse> => {
   if (!refreshToken) {
-    return { success: false, message: "Refresh token required", statusCode: 401 };
+    return {
+      success: false,
+      message: "Refresh token required",
+      statusCode: 401,
+    };
   }
 
   const storedToken = await prisma.userToken.findUnique({
     where: { refreshToken },
-    include: { user: true },
+    select: {
+      userId: true,
+      expiresAt: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          hasCompletedPref: true,
+          isVerified: true,
+        },
+      },
+    },
   });
 
   if (!storedToken) {
-    // Token already rotated or revoked
-    console.warn(`[RefreshTokenService] Token not found or already used: ${refreshToken.substring(0, 10)}...`);
-    return { success: false, message: "Refresh token invalid or already used", statusCode: 401 };
+    console.warn(
+      `[RefreshTokenService] Token not found or already used: ${refreshToken.substring(0, 10)}...`
+    );
+    return {
+      success: false,
+      message: "Refresh token invalid or already used",
+      statusCode: 401,
+    };
   }
 
   if (storedToken.expiresAt < new Date()) {
-    await prisma.userToken.deleteMany({
+    await prisma.userToken.delete({
       where: { refreshToken },
     });
     return { success: false, message: "Refresh token expired", statusCode: 401 };
@@ -59,9 +82,8 @@ export const refreshTokenService = async (refreshToken: string): Promise<Refresh
   const newAccessToken = generateAccessToken(storedToken.userId);
   const newRefreshToken = generateRefreshToken(storedToken.userId);
 
-  // 🔐 ATOMIC ROTATION
   await prisma.$transaction([
-    prisma.userToken.deleteMany({
+    prisma.userToken.delete({
       where: { refreshToken },
     }),
     prisma.userToken.create({
@@ -82,9 +104,8 @@ export const refreshTokenService = async (refreshToken: string): Promise<Refresh
         id: storedToken.user.id,
         email: storedToken.user.email,
         name: storedToken.user.name,
-        hasCompletedPref: storedToken.user.hasCompletedPref
-      }
-    }
+        hasCompletedPref: storedToken.user.hasCompletedPref,
+      },
+    },
   };
 };
-
