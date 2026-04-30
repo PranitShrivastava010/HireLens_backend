@@ -67,6 +67,7 @@ interface ProjectDTO {
   description: string;
   techStack: string[];
   link: string;
+  dateLabel: string;
 }
 
 /**
@@ -101,6 +102,28 @@ interface ResumeSections {
   certifications: CertificationDTO[];
 }
 
+interface ResumeSectionVisibilityDTO {
+  summary: boolean;
+  experience: boolean;
+  education: boolean;
+  projects: boolean;
+  skills: boolean;
+  certifications: boolean;
+}
+
+interface ResumeLayoutSettingsDTO {
+  pageMode: string;
+  density: string;
+  fontSize: number | null;
+  lineHeight: number | null;
+  pagePaddingTop: number | null;
+  pagePaddingBottom: number | null;
+  pagePaddingX: number | null;
+  sectionSpacing: number | null;
+  itemSpacing: number | null;
+  bulletSpacing: number | null;
+}
+
 /**
  * Complete Resume Preview DTO
  * Independent of Prisma models - safe for rendering and export
@@ -111,6 +134,8 @@ export interface ResumePreviewDTO {
   lastUpdated: string; // ISO date string
   basics: ResumeBasicsDTO;
   sections: ResumeSections;
+  layoutSettings: ResumeLayoutSettingsDTO | null;
+  sectionVisibility: ResumeSectionVisibilityDTO;
 }
 
 /**
@@ -131,6 +156,30 @@ export function mapResumeToPreviewDTO(
       location: string | null;
       linkedin: string | null;
       github: string | null;
+    } | null;
+    contactLinks: Array<{
+      id: string;
+      label: string;
+      url: string;
+      orderIndex: number;
+    }>;
+    layoutSettings: {
+      pageMode: string | null;
+      density: string | null;
+      fontSize: number | null;
+      lineHeight: number | null;
+      pagePaddingTop: number | null;
+      pagePaddingBottom: number | null;
+      pagePaddingX: number | null;
+      sectionSpacing: number | null;
+      itemSpacing: number | null;
+      bulletSpacing: number | null;
+      showSummary: boolean;
+      showExperience: boolean;
+      showProjects: boolean;
+      showSkills: boolean;
+      showEducation: boolean;
+      showCertifications: boolean;
     } | null;
     experiences: Array<{
       id: string;
@@ -157,6 +206,7 @@ export function mapResumeToPreviewDTO(
       description: string;
       techStack: string[];
       link: string | null;
+      dateLabel: string | null;
     }>;
     skills: Array<{
       id: string;
@@ -220,6 +270,13 @@ export function mapResumeToPreviewDTO(
       });
     }
 
+    for (const link of resumeFromDb.contactLinks ?? []) {
+      links.push({
+        label: link.label,
+        url: link.url,
+      });
+    }
+
     return {
       email: normalizeString(basics.email),
       phone: normalizeString(basics.phone),
@@ -276,6 +333,7 @@ export function mapResumeToPreviewDTO(
         description: proj.description,
         techStack: proj.techStack || [],
         link: normalizeString(proj.link),
+        dateLabel: normalizeString(proj.dateLabel),
       })),
       skills: resumeFromDb.skills.map((skill) => ({
         id: skill.id,
@@ -291,6 +349,37 @@ export function mapResumeToPreviewDTO(
         link: normalizeString(cert.link),
       })),
     },
+    layoutSettings: resumeFromDb.layoutSettings
+      ? {
+          pageMode: normalizeString(resumeFromDb.layoutSettings.pageMode, "auto"),
+          density: normalizeString(resumeFromDb.layoutSettings.density, "balanced"),
+          fontSize: resumeFromDb.layoutSettings.fontSize,
+          lineHeight: resumeFromDb.layoutSettings.lineHeight,
+          pagePaddingTop: resumeFromDb.layoutSettings.pagePaddingTop,
+          pagePaddingBottom: resumeFromDb.layoutSettings.pagePaddingBottom,
+          pagePaddingX: resumeFromDb.layoutSettings.pagePaddingX,
+          sectionSpacing: resumeFromDb.layoutSettings.sectionSpacing,
+          itemSpacing: resumeFromDb.layoutSettings.itemSpacing,
+          bulletSpacing: resumeFromDb.layoutSettings.bulletSpacing,
+        }
+      : null,
+    sectionVisibility: resumeFromDb.layoutSettings
+      ? {
+          summary: resumeFromDb.layoutSettings.showSummary,
+          experience: resumeFromDb.layoutSettings.showExperience,
+          education: resumeFromDb.layoutSettings.showEducation,
+          projects: resumeFromDb.layoutSettings.showProjects,
+          skills: resumeFromDb.layoutSettings.showSkills,
+          certifications: resumeFromDb.layoutSettings.showCertifications,
+        }
+      : {
+          summary: true,
+          experience: true,
+          education: true,
+          projects: true,
+          skills: true,
+          certifications: true,
+        },
   };
 
   return dto;

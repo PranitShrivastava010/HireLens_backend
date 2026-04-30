@@ -1,5 +1,36 @@
 import { z } from "zod";
 
+const nullableTrimmedString = () => z.string().trim().min(1).nullable().optional();
+const nullableUrlString = () => z.string().url("Invalid URL").nullable().optional();
+
+export const resumeContactLinkSchema = z.object({
+  label: z.string().trim().min(1, "Link label is required"),
+  url: z.string().url("Invalid link URL"),
+});
+
+export const resumeSectionVisibilitySchema = z.object({
+  summary: z.boolean().optional(),
+  experience: z.boolean().optional(),
+  projects: z.boolean().optional(),
+  skills: z.boolean().optional(),
+  education: z.boolean().optional(),
+  certifications: z.boolean().optional(),
+});
+
+export const resumeLayoutSettingsSchema = z.object({
+  pageMode: z.string().trim().min(1).optional(),
+  density: z.string().trim().min(1).optional(),
+  fontSize: z.number().min(8).max(14).optional(),
+  lineHeight: z.number().min(0.8).max(2).optional(),
+  pagePaddingTop: z.number().min(0).max(2).optional(),
+  pagePaddingBottom: z.number().min(0).max(2).optional(),
+  pagePaddingX: z.number().min(0).max(2).optional(),
+  sectionSpacing: z.number().int().min(0).max(30).optional(),
+  itemSpacing: z.number().int().min(0).max(30).optional(),
+  bulletSpacing: z.number().int().min(0).max(30).optional(),
+  sectionVisibility: resumeSectionVisibilitySchema.optional(),
+});
+
 /**
  * Resume Basics (maps to ResumeBasics table)
  */
@@ -8,22 +39,28 @@ export const resumeBasicsSchema = z.object({
     .string()
     .min(2, "Full name must be at least 2 characters"),
 
-  headline: z.string().optional(),
-  summary: z.string().optional(),
+  headline: nullableTrimmedString(),
+  summary: nullableTrimmedString(),
 
-  email: z.string().email("Invalid email").optional(),
-  phone: z.string().optional(),
-  location: z.string().optional(),
+  email: z.string().email("Invalid email").nullable().optional(),
+  phone: nullableTrimmedString(),
+  location: nullableTrimmedString(),
 
   linkedin: z
     .string()
     .url("Invalid LinkedIn URL")
+    .nullable()
     .optional(),
 
   github: z
     .string()
     .url("Invalid GitHub URL")
+    .nullable()
     .optional(),
+});
+
+export const updateResumeBasicsSchema = resumeBasicsSchema.partial().extend({
+  customLinks: z.array(resumeContactLinkSchema).optional(),
 });
 
 /**
@@ -36,6 +73,8 @@ export const createResumeSchema = z.object({
   title: z.string().optional(),
 
   basics: resumeBasicsSchema,
+  customLinks: z.array(resumeContactLinkSchema).optional(),
+  layoutSettings: resumeLayoutSettingsSchema.optional(),
 });
 
 /**
@@ -50,9 +89,9 @@ export const resumeExperienceSchema = z.object({
     .string()
     .min(1, "Role is required"),
 
-  location: z.string().optional(),
+  location: nullableTrimmedString(),
   startDate: z.coerce.date(),
-  endDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().nullable().optional(),
   isCurrent: z.boolean().default(false),
   bullets: z.array(z.string()).default([]),
 }).refine(
@@ -80,7 +119,7 @@ export const resumeEducationSchema = z.object({
     .string()
     .min(1, "Degree is required"),
 
-  field: z.string().optional(),
+  field: nullableTrimmedString(),
   startYear: z.coerce
     .number()
     .int()
@@ -92,6 +131,7 @@ export const resumeEducationSchema = z.object({
     .int()
     .min(1900, "Invalid end year")
     .max(new Date().getFullYear() + 1, "End year cannot be in future")
+    .nullable()
     .optional(),
 }).refine(
   (data) => {
@@ -116,9 +156,10 @@ export const resumeSkillSchema = z.object({
 
   level: z
     .enum(["Beginner", "Intermediate", "Expert"])
+    .nullable()
     .optional(),
 
-  category: z.string().optional(),
+  category: nullableTrimmedString(),
 });
 
 /**
@@ -134,7 +175,8 @@ export const resumeProjectSchema = z.object({
     .min(1, "Description is required"),
 
   techStack: z.array(z.string()).default([]),
-  link: z.string().url("Invalid project URL").optional(),
+  link: nullableUrlString(),
+  dateLabel: nullableTrimmedString(),
 });
 
 /**
@@ -154,9 +196,10 @@ export const resumeCertificationSchema = z.object({
     .int()
     .min(1900, "Invalid year")
     .max(new Date().getFullYear(), "Year cannot be in future")
+    .nullable()
     .optional(),
 
-  link: z.string().url("Invalid certification URL").optional(),
+  link: nullableUrlString(),
 });
 
 /**
@@ -171,9 +214,12 @@ export const updateResumeTitleSchema = z.object({
  */
 export type CreateResumeInput = z.infer<typeof createResumeSchema>;
 export type ResumeBasicsInput = z.infer<typeof resumeBasicsSchema>;
+export type UpdateResumeBasicsInput = z.infer<typeof updateResumeBasicsSchema>;
 export type ResumeExperienceInput = z.infer<typeof resumeExperienceSchema>;
 export type ResumeEducationInput = z.infer<typeof resumeEducationSchema>;
 export type ResumeSkillInput = z.infer<typeof resumeSkillSchema>;
 export type ResumeProjectInput = z.infer<typeof resumeProjectSchema>;
 export type ResumeCertificationInput = z.infer<typeof resumeCertificationSchema>;
 export type UpdateResumeTitleInput = z.infer<typeof updateResumeTitleSchema>;
+export type ResumeContactLinkInput = z.infer<typeof resumeContactLinkSchema>;
+export type ResumeLayoutSettingsInput = z.infer<typeof resumeLayoutSettingsSchema>;

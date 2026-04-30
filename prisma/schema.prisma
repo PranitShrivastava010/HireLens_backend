@@ -445,6 +445,8 @@ model BuildResume {
   projects      ResumeProject[]
   skills        ResumeSkill[]
   certifications ResumeCertification[]
+  contactLinks  ResumeContactLink[]
+  layoutSettings ResumeLayoutSettings?
 }
 
 model ResumeBasics {
@@ -513,6 +515,7 @@ model ResumeProject {
   description String
   techStack   String[]
   link        String?
+  dateLabel   String?
 
   resume BuildResume @relation(fields: [resumeId], references: [id])
 }
@@ -525,6 +528,41 @@ model ResumeCertification {
   issuer    String
   year      Int?
   link      String?
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+model ResumeContactLink {
+  id         String @id @default(uuid())
+  resumeId   String
+  label      String
+  url        String
+  orderIndex Int    @default(0)
+
+  resume BuildResume @relation(fields: [resumeId], references: [id])
+
+  @@index([resumeId, orderIndex])
+}
+
+model ResumeLayoutSettings {
+  id                 String  @id @default(uuid())
+  resumeId           String  @unique
+  pageMode           String?
+  density            String?
+  fontSize           Float?
+  lineHeight         Float?
+  pagePaddingTop     Float?
+  pagePaddingBottom  Float?
+  pagePaddingX       Float?
+  sectionSpacing     Int?
+  itemSpacing        Int?
+  bulletSpacing      Int?
+  showSummary        Boolean @default(true)
+  showExperience     Boolean @default(true)
+  showProjects       Boolean @default(true)
+  showSkills         Boolean @default(true)
+  showEducation      Boolean @default(true)
+  showCertifications Boolean @default(true)
 
   resume BuildResume @relation(fields: [resumeId], references: [id])
 }

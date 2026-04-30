@@ -6,6 +6,10 @@ export const getResumePreviewService = async (userId: string) => {
     where: { userId },
     include: {
       basics: true,
+      contactLinks: {
+        orderBy: { orderIndex: "asc" },
+      },
+      layoutSettings: true,
       experiences: true,
       educations: true,
       projects: true,

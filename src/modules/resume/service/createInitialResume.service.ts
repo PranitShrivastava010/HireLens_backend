@@ -1,23 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import { Prisma } from "@prisma/client";
-
-type InitResumeInput = {
-  title?: string;
-  basics: {
-    fullName: string;
-    headline?: string;
-    summary?: string;
-    email?: string;
-    phone?: string;
-    location?: string;
-    linkedin?: string;
-    github?: string;
-  };
-};
+import { CreateResumeInput } from "../validators/resume.validator";
 
 export const createInitialResumeService = async (
   userId: string,
-  data: InitResumeInput
+  data: CreateResumeInput
 ) => {
   return prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
@@ -44,6 +31,34 @@ export const createInitialResumeService = async (
           ...data.basics,
         },
       });
+
+      if (data.customLinks?.length) {
+        await tx.resumeContactLink.createMany({
+          data: data.customLinks.map((link, index) => ({
+            resumeId: resume.id,
+            label: link.label,
+            url: link.url,
+            orderIndex: index,
+          })),
+        });
+      }
+
+      if (data.layoutSettings) {
+        const { sectionVisibility, ...layoutValues } = data.layoutSettings;
+
+        await tx.resumeLayoutSettings.create({
+          data: {
+            resumeId: resume.id,
+            ...layoutValues,
+            showSummary: sectionVisibility?.summary ?? true,
+            showExperience: sectionVisibility?.experience ?? true,
+            showProjects: sectionVisibility?.projects ?? true,
+            showSkills: sectionVisibility?.skills ?? true,
+            showEducation: sectionVisibility?.education ?? true,
+            showCertifications: sectionVisibility?.certifications ?? true,
+          },
+        });
+      }
 
       return resume;
     }

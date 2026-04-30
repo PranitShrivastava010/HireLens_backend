@@ -39,6 +39,7 @@ export const applyJobService = async ({
       update: {
         statusId: status.id,
         interviewDate: interviewDate ?? null,
+        ...(statusKey === "APPLIED" ? { appliedAt: new Date() } : {}),
       },
       create: {
         userId,

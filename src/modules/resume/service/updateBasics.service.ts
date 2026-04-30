@@ -1,10 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import { Prisma, ResumeBasics } from "@prisma/client";
-import { ResumeBasicsInput } from "../validators/resume.validator";
+import { UpdateResumeBasicsInput } from "../validators/resume.validator";
 
 export const updateBasicsService = async (
   userId: string,
-  data: Partial<ResumeBasicsInput>
+  data: UpdateResumeBasicsInput
 ): Promise<ResumeBasics> => {
   return prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
@@ -18,22 +18,41 @@ export const updateBasicsService = async (
         throw new Error("Resume not found");
       }
 
+      const { customLinks, ...basicsData } = data;
+
       // Upsert basics
       const basics = await tx.resumeBasics.upsert({
         where: { resumeId: resume.id },
-        update: data,
+        update: basicsData,
         create: {
           resumeId: resume.id,
-          fullName: data.fullName || "",
-          headline: data.headline,
-          summary: data.summary,
-          email: data.email,
-          phone: data.phone,
-          location: data.location,
-          linkedin: data.linkedin,
-          github: data.github,
+          fullName: basicsData.fullName || "",
+          headline: basicsData.headline,
+          summary: basicsData.summary,
+          email: basicsData.email,
+          phone: basicsData.phone,
+          location: basicsData.location,
+          linkedin: basicsData.linkedin,
+          github: basicsData.github,
         },
       });
+
+      if (customLinks) {
+        await tx.resumeContactLink.deleteMany({
+          where: { resumeId: resume.id },
+        });
+
+        if (customLinks.length) {
+          await tx.resumeContactLink.createMany({
+            data: customLinks.map((link, index) => ({
+              resumeId: resume.id,
+              label: link.label,
+              url: link.url,
+              orderIndex: index,
+            })),
+          });
+        }
+      }
 
       return basics;
     }

@@ -25,6 +25,7 @@ import {
   updateCertificationController,
   deleteCertificationController,
   getResumePreviewController,
+  updateLayoutSettingsController,
 } from "./resume.controller";
 
 const router = Router();
@@ -43,6 +44,9 @@ router.get("/", getResumeController);
 
 // PUT /api/resume/title - Update resume title
 router.put("/title", updateResumeTitleController);
+
+// PUT /api/resume/layout - Update layout settings
+router.put("/layout", updateLayoutSettingsController);
 
 // ============================================
 // RESUME BASICS ROUTES

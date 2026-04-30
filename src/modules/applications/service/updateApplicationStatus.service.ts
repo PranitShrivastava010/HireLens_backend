@@ -22,6 +22,7 @@ export const updateApplicationStatusService = async ({
     data: {
       statusId: status.id,
       interviewDate: status.allowsDate ? interviewDate ?? new Date() : null,
+      ...(newStatusKey === "APPLIED" ? { appliedAt: new Date() } : {}),
     },
   });
 };

@@ -26,6 +26,7 @@ export const createProjectService = async (
           description: data.description,
           techStack: data.techStack,
           link: data.link,
+          dateLabel: data.dateLabel,
         },
       });
 

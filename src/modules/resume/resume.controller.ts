@@ -24,15 +24,17 @@ import { updateCertificationService } from "./service/updateCertification.servic
 import { deleteCertificationService } from "./service/deleteCertification.service";
 import {
   createResumeSchema,
-  resumeBasicsSchema,
+  updateResumeBasicsSchema,
   resumeExperienceSchema,
   resumeEducationSchema,
   resumeSkillSchema,
   resumeProjectSchema,
   resumeCertificationSchema,
+  resumeLayoutSettingsSchema,
   updateResumeTitleSchema,
 } from "./validators/resume.validator";
 import { getResumePreviewService } from "./service/resumePreview.service";
+import { updateLayoutSettingsService } from "./service/updateLayoutSettings.service";
 
 export const uploadResumeController = async (req: Request, res: Response) => {
   try {
@@ -202,7 +204,7 @@ export const updateBasicsController = async (req: Request, res: Response) => {
     const userId = req.user!.userId;
 
     // Validate input
-    const parsed = resumeBasicsSchema.partial().parse(req.body);
+    const parsed = updateResumeBasicsSchema.parse(req.body);
 
     const basics = await updateBasicsService(userId, parsed);
 
@@ -894,6 +896,39 @@ export const getResumePreviewController = async (
     return res.status(404).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+export const updateLayoutSettingsController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = req.user!.userId;
+
+    const parsed = resumeLayoutSettingsSchema.parse(req.body);
+
+    const layoutSettings = await updateLayoutSettingsService(userId, parsed);
+
+    return res.status(200).json({
+      success: true,
+      data: layoutSettings,
+    });
+  } catch (error: any) {
+    console.error("Update layout settings error:", error);
+
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input",
+        errors: error.errors,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update layout settings",
     });
   }
 };

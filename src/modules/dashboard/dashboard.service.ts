@@ -36,6 +36,9 @@ export const getDashboardStatsService = async (userId: string) => {
           gte: startOfCurrentWeek,
           lte: endOfCurrentWeek,
         },
+        status: {
+          key: "APPLIED",
+        },
       },
       select: {
         appliedAt: true,
@@ -94,9 +97,7 @@ export const getDashboardStatsService = async (userId: string) => {
     }),
   ]);
 
-  const appliedThisWeekCount = applicationsThisWeek.filter(
-    (application) => application.status.key === "APPLIED"
-  ).length;
+  const appliedThisWeekCount = applicationsThisWeek.length;
   const weeklyGoal = user.weeklyGoal || 10;
   const percentage = Math.min(
     Math.round((appliedThisWeekCount / weeklyGoal) * 100),
