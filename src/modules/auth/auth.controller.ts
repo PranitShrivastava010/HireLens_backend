@@ -4,6 +4,7 @@ import { verifyOtpService } from "./services/verifyOtp.service";
 import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
 import { loginService } from "./services/login.service";
 import { refreshTokenService } from "./services/refreshToken.service";
+import { googleAuthService } from "./services/googleAuth.service";
 
 export const registerController = async (
   req: Request,
@@ -143,5 +144,38 @@ export const refreshTokenController = async (
     });
   } catch (err) {
     next(err);
+  }
+};
+
+export const googleAuthController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { idToken } = req.body;
+
+    const { accessToken, refreshToken, sendUser } = await googleAuthService(idToken);
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true, // REQUIRED for SameSite=None
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      code: SUCCESS_MESSAGES.LOGIN_SUCCESSFUL.code, // Reuse login successful
+      message: "Google Sign-In successful",
+      Result: { accessToken, sendUser }
+    });
+  } catch (err) {
+    res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      code: ERROR_MESSAGES.LOGIN_FAILED.code,
+      message: "Google authentication failed",
+      Error: err
+    });
   }
 };

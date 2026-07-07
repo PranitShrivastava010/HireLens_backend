@@ -17,11 +17,14 @@ model User {
   id                  String   @id @default(uuid())
   email               String   @unique
   name                String
-  password            String
+  password            String?
+  authProvider        AuthProvider @default(EMAIL)
+  googleId            String?  @unique
   isVerified          Boolean  @default(false)
   hasCompletedPref    Boolean @default(false)
   weeklyGoal          Int     @default(10)
   createdAt           DateTime @default(now())
+
 
   rolePreferences     UserRolePreference[]
   skillPreferences    UserSkillPreference[]
@@ -565,5 +568,10 @@ model ResumeLayoutSettings {
   showCertifications Boolean @default(true)
 
   resume BuildResume @relation(fields: [resumeId], references: [id])
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
 }
 

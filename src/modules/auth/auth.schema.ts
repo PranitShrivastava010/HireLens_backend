@@ -16,6 +16,11 @@ export const verifyOtpSchema = z.object({
   otp: z.string().length(6, "OTP must be exactly 6 digits"),
 });
 
+export const googleSchema = z.object({
+  idToken: z.string({ required_error: "idToken is required" }),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type GoogleInput = z.infer<typeof googleSchema>;

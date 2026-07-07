@@ -3,10 +3,21 @@ import { comparePassword } from "../../../utils/hashPassword";
 import { generateAccessToken, generateRefreshToken } from "../../../utils/jwt";
 
 export const loginService = async (email: string, password: string) => {
-  const user = await prisma.user.findUnique({ where: { email }, select: {id: true, email: true, name: true, password: true, isVerified: true, hasCompletedPref: true} });
+  const user = await prisma.user.findUnique({ 
+    where: { email }, 
+    select: {id: true, email: true, name: true, password: true, isVerified: true, hasCompletedPref: true, authProvider: true} 
+  });
 
   if (!user) throw new Error("User not found");
   if (!user.isVerified) throw new Error("User not verified");
+
+  if (user.authProvider === 'GOOGLE' && !user.password) {
+    throw new Error("This email is registered using Google. Please sign in with Google.");
+  }
+
+  if (!user.password) {
+    throw new Error("Password is required to sign in with email.");
+  }
 
   const isMatch = await comparePassword(password, user.password);
   if (!isMatch) throw new Error("Invalid credentials");
