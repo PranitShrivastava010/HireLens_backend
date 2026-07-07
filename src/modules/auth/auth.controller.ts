@@ -5,6 +5,7 @@ import { ERROR_MESSAGES, HTTP_STATUS, SUCCESS_MESSAGES } from "../../constants";
 import { loginService } from "./services/login.service";
 import { refreshTokenService } from "./services/refreshToken.service";
 import { googleAuthService } from "./services/googleAuth.service";
+import { logoutService } from "./services/logout.service";
 
 export const registerController = async (
   req: Request,
@@ -177,5 +178,31 @@ export const googleAuthController = async (
       message: "Google authentication failed",
       Error: err
     });
+  }
+};
+
+export const logoutController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (refreshToken) {
+      await logoutService(refreshToken);
+    }
+    
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "Logged out successfully"
+    });
+  } catch (err) {
+    next(err);
   }
 };
