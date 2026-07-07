@@ -25,6 +25,8 @@ const allowedOrigins = new Set([
 
 const slowRequestThresholdMs = Number(process.env.SLOW_REQUEST_MS ?? 1000);
 const logAllRequests = process.env.LOG_ALL_REQUESTS === "true";
+const allowChromeExtensionOrigins =
+  process.env.ALLOW_CHROME_EXTENSION_ORIGINS !== "false";
 
 app.use(
   cors({
@@ -34,7 +36,10 @@ app.use(
         return;
       }
 
-      if (allowedOrigins.has(origin)) {
+      if (
+        allowedOrigins.has(origin) ||
+        (allowChromeExtensionOrigins && origin.startsWith("chrome-extension://"))
+      ) {
         callback(null, true);
         return;
       }

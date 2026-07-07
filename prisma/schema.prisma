@@ -21,6 +21,8 @@ model User {
   isVerified          Boolean  @default(false)
   hasCompletedPref    Boolean @default(false)
   weeklyGoal          Int     @default(10)
+  outreachEmail       String?
+  outreachAppPassword String?
   createdAt           DateTime @default(now())
 
   rolePreferences     UserRolePreference[]
@@ -31,6 +33,11 @@ model User {
   atsAnalysis AtsAnalysis[]
 
   applications JobApplication[]
+  targetCompanies TargetCompany[]
+  outreachContacts OutreachContact[]
+  outreachDiscoveryQueues OutreachDiscoveryQueue[]
+  outreachDiscoveryTasks OutreachDiscoveryTask[]
+  emailOutreachCampaigns EmailOutreachCampaign[]
 }
 
 model Otp {
@@ -108,6 +115,7 @@ model Jobs {
   atsAnalysis            AtsAnalysis[]
   jobRoles               JobRole[]
   jobSkills              JobSkill[]
+  targetCompanies        OutreachCompanyJob[]
 
   @@index([title])
   @@index([companyName])
@@ -369,6 +377,229 @@ model JobApplication {
   @@index([statusId])
   @@index([userId, appliedAt])
   @@index([userId, statusId, interviewDate])
+}
+
+enum TargetCompanySource {
+  MANUAL
+  JOB_AUTO_DETECTED
+}
+
+enum OutreachProvider {
+  APOLLO
+  HUNTER
+  LINKEDIN_ASSISTED
+}
+
+enum OutreachContactType {
+  RECRUITER
+  HIRING_MANAGER
+  ENGINEER
+  OTHER
+}
+
+enum OutreachEmailStatus {
+  VERIFIED
+  UNVERIFIED
+  MISSING
+}
+
+enum OutreachStatus {
+  PENDING
+  AI_GENERATED
+  APPROVED
+  SENT
+  SKIPPED
+  COMPLETED
+}
+
+enum LinkedInStatus {
+  DISCOVERED
+  CONNECTION_NOTE_READY
+  CONNECTION_SENT
+  CONNECTION_ACCEPTED
+  CONNECTION_DECLINED
+  DM_READY
+  DM_SENT
+  SKIPPED
+}
+
+enum OutreachDiscoveryQueueStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum OutreachDiscoveryTaskStatus {
+  PENDING
+  OPENED
+  CAPTURED
+  SKIPPED
+  FAILED
+}
+
+model TargetCompany {
+  id             String              @id @default(uuid())
+  userId         String
+  name           String
+  domain         String?
+  companyWebsite String?
+  companyLogo    String?
+  industry       String?
+  size           String?
+  careersPageUrl String?
+  source         TargetCompanySource @default(MANUAL)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs           OutreachCompanyJob[]
+  contacts       OutreachContact[]
+  discoveryTasks OutreachDiscoveryTask[]
+
+  @@unique([userId, name])
+  @@unique([userId, domain])
+  @@index([userId])
+  @@index([domain])
+}
+
+model OutreachDiscoveryQueue {
+  id             String                       @id @default(uuid())
+  userId         String
+  name           String?
+  status         OutreachDiscoveryQueueStatus @default(PENDING)
+  totalTasks     Int                          @default(0)
+  completedTasks Int                          @default(0)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  completedAt    DateTime?
+
+  user           User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks          OutreachDiscoveryTask[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model OutreachDiscoveryTask {
+  id              String                      @id @default(uuid())
+  queueId         String
+  userId          String
+  targetCompanyId String
+  contactType     OutreachContactType
+  searchTitle     String
+  searchQuery     String
+  searchUrl       String
+  status          OutreachDiscoveryTaskStatus @default(PENDING)
+  orderIndex      Int
+  capturedCount   Int                         @default(0)
+  openedAt        DateTime?
+  capturedAt      DateTime?
+  skippedAt       DateTime?
+  errorMessage    String?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  queue           OutreachDiscoveryQueue      @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCompany   TargetCompany               @relation(fields: [targetCompanyId], references: [id], onDelete: Cascade)
+
+  @@unique([queueId, orderIndex])
+  @@index([queueId, status, orderIndex])
+  @@index([userId, status])
+  @@index([targetCompanyId])
+}
+
+model OutreachCompanyJob {
+  targetCompanyId String
+  jobId           String
+
+  targetCompany   TargetCompany @relation(fields: [targetCompanyId], references: [id], onDelete: Cascade)
+  job             Jobs          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([targetCompanyId, jobId])
+  @@index([jobId])
+}
+
+model OutreachContact {
+  id                   String              @id @default(uuid())
+  userId               String
+  targetCompanyId      String
+  name                 String
+  role                 String?
+  company              String
+  email                String?
+  linkedinUrl          String?
+  contactType          OutreachContactType @default(OTHER)
+  emailStatus          OutreachEmailStatus @default(MISSING)
+  outreachStatus       OutreachStatus      @default(PENDING)
+  linkedinStatus       LinkedInStatus      @default(DISCOVERED)
+  provider             OutreachProvider
+  providerContactId    String?
+  providerRaw          Json?
+  connectionSentAt     DateTime?
+  connectionAcceptedAt DateTime?
+  connectionNote       String?
+  lastContactedAt      DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCompany        TargetCompany       @relation(fields: [targetCompanyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@unique([userId, linkedinUrl])
+  @@unique([userId, targetCompanyId, name])
+  @@index([userId])
+  @@index([targetCompanyId])
+  @@index([contactType])
+  @@index([emailStatus])
+  @@index([linkedinStatus])
+}
+
+enum EmailOutreachStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum EmailOutreachRecipientStatus {
+  PENDING
+  INITIAL_SENT
+  FOLLOWUP_SENT
+  REPLIED
+  BOUNCED
+  STOPPED
+}
+
+model EmailOutreachCampaign {
+  id              String   @id @default(uuid())
+  userId          String
+  subject         String
+  initialMessage  String   @db.Text
+  followUpMessage String?  @db.Text
+  resumeLink      String?
+  status          EmailOutreachStatus  @default(DRAFT)
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipients      EmailOutreachRecipient[]
+
+  @@unique([userId, id])
+}
+
+model EmailOutreachRecipient {
+  id                   String      @id @default(uuid())
+  campaignId           String
+  email                String
+  status               EmailOutreachRecipientStatus  @default(PENDING)
+  initialSentAt        DateTime?
+  followUpScheduledFor DateTime?
+  followUpSentAt       DateTime?
+
+  campaign             EmailOutreachCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([id, campaignId])
 }
 
 model JobKeyword {

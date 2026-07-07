@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { runEnrichCronController, runFetchCronController } from "./cron.controller";
+import {
+  runEnrichCronController,
+  runFetchCronController,
+} from "./cron.controller";
 
 const router = Router();
 

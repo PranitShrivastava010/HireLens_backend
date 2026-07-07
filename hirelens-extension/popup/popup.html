@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HireLens Discovery</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">HireLens</p>
+        <h1>Discovery Queue</h1>
+      </header>
+
+      <label>
+        API base
+        <input id="apiBase" type="url" placeholder="http://localhost:5000" />
+      </label>
+
+      <label>
+        Auth token
+        <textarea id="authToken" rows="3" placeholder="Paste your JWT access token"></textarea>
+      </label>
+
+      <label>
+        Queue ID
+        <input id="queueId" type="text" placeholder="Outreach discovery queue ID" />
+      </label>
+
+      <div class="actions">
+        <button id="saveBtn" type="button" class="secondary">Save</button>
+        <button id="continueBtn" type="button">Start / Continue</button>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,157 @@
+#hirelens-discovery-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483647;
+  width: 360px;
+  max-height: min(640px, calc(100vh - 36px));
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 1fr) auto auto;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #d8e1db;
+  border-radius: 10px;
+  color: #17201a;
+  background: #fbfdfb;
+  box-shadow: 0 18px 50px rgba(15, 42, 26, 0.24);
+  font: 14px/1.35 "Segoe UI", sans-serif;
+}
+
+#hirelens-discovery-panel * {
+  box-sizing: border-box;
+}
+
+.hirelens-panel-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hirelens-panel-header p {
+  margin: 0 0 2px;
+  color: #177245;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hirelens-panel-header h2 {
+  margin: 0;
+  color: #17201a;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.hirelens-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #5f6f66;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hirelens-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.hirelens-contact-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  min-height: 54px;
+  padding: 9px;
+  border: 1px solid #e0e8e2;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+
+.hirelens-contact-row input {
+  margin-top: 3px;
+  accent-color: #177245;
+}
+
+.hirelens-contact-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hirelens-contact-text strong {
+  overflow: hidden;
+  color: #17201a;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hirelens-contact-text span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #5f6f66;
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hirelens-actions {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 8px;
+}
+
+#hirelens-discovery-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: white;
+  background: #177245;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#hirelens-discovery-panel button:hover {
+  background: #0f5a35;
+}
+
+#hirelens-discovery-panel button.secondary,
+#hirelens-discovery-panel [data-hirelens-refresh] {
+  color: #17201a;
+  background: #dfe8e2;
+}
+
+#hirelens-discovery-panel button.secondary:hover,
+#hirelens-discovery-panel [data-hirelens-refresh]:hover {
+  background: #cfddd4;
+}
+
+.hirelens-status,
+.hirelens-empty {
+  margin: 0;
+  color: #5f6f66;
+  font-size: 12px;
+}
+
+.hirelens-status.is-error {
+  color: #a33b2d;
+}
+
+@media (max-width: 520px) {
+  #hirelens-discovery-panel {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+  }
+}
