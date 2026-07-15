@@ -32,6 +32,8 @@ import {
   resumeCertificationSchema,
   resumeLayoutSettingsSchema,
   updateResumeTitleSchema,
+  updateResumeExperienceSchema,
+  updateResumeEducationSchema,
 } from "./validators/resume.validator";
 import { getResumePreviewService } from "./service/resumePreview.service";
 import { updateLayoutSettingsService } from "./service/updateLayoutSettings.service";
@@ -284,7 +286,7 @@ export const updateExperienceController = async (
     }
 
     // Validate input
-    const parsed = resumeExperienceSchema.partial().parse(req.body);
+    const parsed = updateResumeExperienceSchema.parse(req.body);
 
     const experience = await updateExperienceService(userId, experienceId, parsed);
 
@@ -447,7 +449,7 @@ export const updateEducationController = async (
     }
 
     // Validate input
-    const parsed = resumeEducationSchema.partial().parse(req.body);
+    const parsed = updateResumeEducationSchema.parse(req.body);
 
     const education = await updateEducationService(userId, educationId, parsed);
 

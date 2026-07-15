@@ -80,7 +80,7 @@ export const createResumeSchema = z.object({
 /**
  * Resume Experience Schema
  */
-export const resumeExperienceSchema = z.object({
+export const resumeExperienceBaseSchema = z.object({
   company: z
     .string()
     .min(1, "Company name is required"),
@@ -94,7 +94,9 @@ export const resumeExperienceSchema = z.object({
   endDate: z.coerce.date().nullable().optional(),
   isCurrent: z.boolean().default(false),
   bullets: z.array(z.string()).default([]),
-}).refine(
+});
+
+export const resumeExperienceSchema = resumeExperienceBaseSchema.refine(
   (data) => {
     if (data.endDate && data.startDate > data.endDate) {
       return false;
@@ -107,10 +109,12 @@ export const resumeExperienceSchema = z.object({
   }
 );
 
+export const updateResumeExperienceSchema = resumeExperienceBaseSchema.partial();
+
 /**
  * Resume Education Schema
  */
-export const resumeEducationSchema = z.object({
+export const resumeEducationBaseSchema = z.object({
   institute: z
     .string()
     .min(1, "Institute name is required"),
@@ -133,7 +137,9 @@ export const resumeEducationSchema = z.object({
     .max(new Date().getFullYear() + 1, "End year cannot be in future")
     .nullable()
     .optional(),
-}).refine(
+});
+
+export const resumeEducationSchema = resumeEducationBaseSchema.refine(
   (data) => {
     if (data.endYear && data.startYear > data.endYear) {
       return false;
@@ -145,6 +151,8 @@ export const resumeEducationSchema = z.object({
     path: ["endYear"],
   }
 );
+
+export const updateResumeEducationSchema = resumeEducationBaseSchema.partial();
 
 /**
  * Resume Skill Schema
